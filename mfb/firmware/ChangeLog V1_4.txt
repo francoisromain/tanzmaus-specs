@@ -1,0 +1,23 @@
+Changes in V1_4
+- TT Pan did not work in Step Mode- FIXED
+- TT Pan has some noise - IMPROVED
+- clear Pattern always cleared the whole pattern instead of only the actual track - FIXED
+- LEDs not updated properly in Rec Mode in some cases - FIXED
+
+Changes in V1_3
+- Attack of Samples improved in Manual Trigger Mode - IMPROVED
+- Pattern Chain always used Pattern Bank A - FIXED
+- Realtime Reocrd via Midi Notes creates double trigger - FIXED
+
+Changes in V1_2
+- first Step after power on was not played - FIXED
+- Realtime Trigger Record and Knob Record did not work in Bar B - FIXED
+- Track Delete of track Sample 1 and Sample 2 did not work - FIXED
+
+
+
+Changes in V1_1c
+- Last Step was ignored when a Pattern was load from flash - FIXED
+- under some circumstances some knobs where blocked in Play Mode - FIXED
+- In Record Mode it is now possible to select all Steps at once with "Shift + Select" - new
+- Sound Parameters now show its last State when SND Key pressed - new

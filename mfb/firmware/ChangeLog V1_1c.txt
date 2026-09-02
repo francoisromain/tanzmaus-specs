@@ -1,0 +1,5 @@
+Changes in V1_1c
+- Last Step was ignored when a Pattern was load from flash - FIXED
+- under some circumstances some knobs where blocked in Play Mode - FIXED
+- In Record Mode it is now possible to select all Steps at once with "Shift + Select" - new
+- Sound Parameters now show its last State when SND Key pressed

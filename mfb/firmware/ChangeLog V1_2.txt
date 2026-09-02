@@ -1,0 +1,10 @@
+Changes in V1_2
+- first Step after power on was not played - FIXED
+- Realtime Trigger Record and Knob Record did not work in Bar B - FIXED
+
+Changes in V1_1
+- Last Step was ignored when a Pattern was load from flash - FIXED
+- under some circumstances some knobs where blocked in Play Mode - FIXED
+- Deleting Steps in Manual Trigger Record with SELECT + INST was buggy - FIXED
+- In Record Mode it is now possible to select all Steps at once with "Shift + Select" - NEW
+- Sound Parameters now show its last State when SND Key pressed - NEW

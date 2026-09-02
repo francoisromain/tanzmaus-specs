@@ -1,0 +1,108 @@
+#!/usr/bin/env python3
+"""MFB Tanzmaus firmware frame checksum (bytes 48-50, 3 bytes / 21 bits).
+
+Recovered empirically from the official .syx files. The 3-byte checksum is
+an XOR-linear (GF(2)) code over the frame's address (bytes 8-9, up to 16 bits)
+and the 38 payload bytes (cols 10-47, 7 usable bits each). bit 7 of every
+payload byte contributes 0 (MIDI-safe 7-bit values). Verified 0 mismatches
+over all 13,604 firmware data frames across V1.6/V1.61/V1.62/V1.63.
+
+Recovery method (see firmware.md, "3-byte frame checksum"):
+  - Deterministic: same (address, 38 payload bytes) => same checksum
+    (0 conflicts over 10,675 distinct keys).
+  - XOR-linear: a reduced-row-echelon solve over the sample set produced
+    0 inconsistent rows (rank 269/320; the unused input bits are never set
+    in real frames, their weights are 0).
+  - The per-bit 21-bit weights below reproduce every frame's checksum.
+
+Layout of the 3 checksum bytes ck[0..2] as a 21-bit value:
+    value = sum over i in 0..2, b in 0..6 of ((ck[i]>>b)&1) << (7*i + b)
+
+Compute:
+    value = XOR over address bit b of (set ? ADDR_BITS[b] : 0)
+            XOR over payload byte k bit b of (set ? PAYLOAD[k][b] : 0)
+            (k in 0..37, b in 0..6)
+"""
+from __future__ import annotations
+
+ADDR_BITS = [
+    0x1e004d, 0x1200d7, 0x0a00e2, 0x1a0008, 0x04059, 0x1ac0b6, 0x1c024, 0x1840a8,
+    0x4c018, 0x98030, 0x130060, 0x1c4044, 0x00000, 0x00000, 0x00000, 0x00000,
+]
+
+PAYLOAD = [
+    [0x1d4094, 0xec060, 0x7c0c4, 0x18044, 0xd0045, 0x140047, 0x600c3],  # 0
+    [0xa0059, 0x1a007f, 0x1a00b3, 0x0402e, 0x0805c, 0x1b40bc, 0x2c030],  # 1
+    [0x1140c4, 0xc80c4, 0x170044, 0x000c5, 0xe0046, 0x120041, 0xa00cf],  # 2
+    [0x1a00e9, 0x1a009e, 0x04074, 0x1ac0ec, 0x1b8094, 0x34060, 0x1cc0c4],  # 3
+    [0x100c4, 0xc0044, 0x160045, 0x200c7, 0xa0042, 0x1a0049, 0x1a00df],  # 4
+    [0x1a00a8, 0x04018, 0x08030, 0x10060, 0x1840c4, 0x1e80c4, 0x1300c4],  # 5
+    [0x1e0044, 0x1200c5, 0xa00c6, 0x1a0040, 0x1a00cd, 0x1a00d6, 0x1a00e0],  # 6
+    [0x04050, 0x1ac0a4, 0x1c000, 0x38000, 0x70000, 0xe0000, 0x1c0000],  # 7
+    [0x100081, 0x00083, 0x00007, 0x0000e, 0x0001c, 0x00038, 0x00070],  # 8
+    [0x1a8084, 0x14040, 0x18c084, 0x5c040, 0x11c084, 0x17c040, 0x15c004],  # 9
+    [0x5c006, 0x1fc0c5, 0x5c00f, 0x1fc0d7, 0x5c02b, 0x1fc09f, 0x1f80bf],  # 10
+    [0x4407b, 0x6803b, 0x1940bf, 0x1280ff, 0x1f407b, 0x1080bb, 0x15403e],  # 11
+    [0xf40fd, 0x108036, 0x154025, 0xa80ca, 0xf4091, 0xac0ea, 0xfc0d1],  # 12
+    [0xd0091, 0xe40ea, 0x6c0d1, 0x3806e, 0x90011, 0x640eb, 0x16c0d3],  # 13
+    [0x90018, 0x640f9, 0x16c0f7, 0x380a2, 0x13408c, 0x68099, 0xd0033],  # 14
+    [0xe4048, 0x12805d, 0xb00f7, 0x180022, 0x4400d, 0x8801a, 0x110034],  # 15
+    [0x1e40d5, 0x1280e6, 0xb0080, 0x240c8, 0x1ec095, 0x9c062, 0x9c0c0],  # 16
+    [0x1500d5, 0x400e6, 0x60000, 0x1840c9, 0xac017, 0x1c0e7, 0x19c0cb],  # 17
+    [0x1500f8, 0x400bc, 0x1c40b0, 0x1880e1, 0xb4047, 0x188043, 0x1f00cb],  # 18
+    [0xe00f8, 0x12003c, 0x104031, 0x080e2, 0x1b40c1, 0x1880ce, 0x1f00d0],  # 19
+    [0xe0094, 0x840e0, 0xac0c5, 0x1b8046, 0x1900c1, 0x1c00ce, 0x1600d0],  # 20
+    [0xa0014, 0x040e1, 0x1ac0c7, 0x1b80c2, 0x1900c8, 0x1c00dc, 0x1600f4],  # 21
+    [0x104080, 0x08081, 0x10003, 0x20006, 0x4000c, 0x80018, 0x100030],  # 22
+    [0x1a40c5, 0x1a80c6, 0x1b00c0, 0x1800cc, 0x1e00d4, 0x1200e4, 0xa0084],  # 23
+    [0x1ac085, 0x1c042, 0x19c080, 0x7c048, 0x15c094, 0x1fc060, 0x5c044],  # 24
+    [0x50047, 0x40043, 0x6004b, 0x2005b, 0xa007b, 0x1a003b, 0x0403f],  # 25
+    [0x1b40f8, 0x1880bc, 0x54030, 0xa8060, 0xf40c4, 0x108044, 0xf00c5],  # 26
+    [0xe00c1, 0x12004e, 0xa00d1, 0x1a006e, 0x1a0091, 0x0406a, 0x1ac0d0],  # 27
+    [0x190094, 0x64060, 0x16c0c4, 0x380c4, 0x90044, 0x1c0045, 0x1600c7],  # 28
+    [0xa0048, 0x1a005d, 0x1a00f7, 0x1a00a2, 0x0400c, 0x08018, 0x10030],  # 29
+    [0x1e40c4, 0x1280c4, 0xb00c4, 0x180044, 0x1e00c5, 0x1200c6, 0xa00c0],  # 30
+    [0x1a00d5, 0x1a00e6, 0x1a0080, 0x04048, 0x1ac094, 0x1c060, 0x19c0c4],  # 31
+    [0x1500c4, 0x400c4, 0x60044, 0x20045, 0xa0047, 0x1a0043, 0x1a00cb],  # 32
+    [0x1a00f8, 0x1a00bc, 0x04030, 0x08060, 0x1b40c4, 0x1880c4, 0x1f00c4],  # 33
+    [0xe00c4, 0x120044, 0xa00c5, 0x1a0046, 0x1a00c1, 0x1a00ce, 0x1a00d0],  # 34
+    [0x1a0094, 0x04060, 0x1ac0c4, 0x1b80c4, 0x1900c4, 0x1c00c4, 0x1600c4],  # 35
+    [0xa0044, 0x1a0045, 0x1a00c7, 0x1a00c2, 0x00000, 0x00000, 0x00000],  # 36 (col36)
+    [0x1a4084, 0x00000, 0x00000, 0x00000, 0x00000, 0x00000, 0x00000],  # 37 (col37)
+]
+
+# Position of each payload byte's bit index that carries value bits (0..6).
+# bit index 7 never set (7-bit MIDI-safe).
+
+_MASK = (1 << 21) - 1
+
+
+def checksum_value(address: int, payload38: bytes) -> int:
+    """Return the 21-bit checksum value for a frame's address + 38 payload bytes.
+
+    `payload38` must be bytes/size 38 (frame columns 10..47, including col36/37).
+    """
+    value = 0
+    for b in range(16):
+        if (address >> b) & 1:
+            value ^= ADDR_BITS[b]
+    for k in range(38):
+        b_ = payload38[k]
+        row = PAYLOAD[k]
+        for bit in range(7):
+            if (b_ >> bit) & 1:
+                value ^= row[bit]
+    return value & _MASK
+
+
+def value_to_checksum_bytes(value: int) -> bytes:
+    """Split a 21-bit checksum value into the 3 checksum bytes (7 bits each)."""
+    out = bytearray()
+    for i in range(3):
+        out.append((value >> (7 * i)) & 0x7F)
+    return bytes(out)
+
+
+def frame_checksum_bytes(address: int, payload38: bytes) -> bytes:
+    """Compute checksum bytes 48..50 for a firmware data frame."""
+    return value_to_checksum_bytes(checksum_value(address, payload38))
