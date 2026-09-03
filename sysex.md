@@ -82,6 +82,7 @@ unsigned char CalcCrc(unsigned char crc, unsigned char data) {
 }
 ```
 
+- In the wire format (`F0 ... F7`), the CRC covers the 57 bytes **after** F0 and **before** the checksum byte: `00 21 0B 04 00 05 addrLo addrHi subIdx [48 data bytes]`. F0 and F7 are excluded from the CRC computation.
 - Init `crc = 0`, feed each byte, result is 0–127 (MIDI-data-safe).
 
 ## Address map
