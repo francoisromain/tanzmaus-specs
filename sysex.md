@@ -4,6 +4,17 @@ From the official MFB sample tool app [source code](mfb/tool/TanzmausSampleTool/
 
 Use this to build an app that uploads samples to the Tanzmaus.
 
+## Hardware Requirements
+
+- Firmware ≥ 1.6
+- MIDI input connected to interface output
+- Sequencer stopped, device in Play/Mute mode (REC LED off)
+
+### Tips
+
+- Start samples at a zero crossing to avoid clicks
+- Files longer than the bank duration are truncated
+
 ## Header
 
 Every message is wrapped in SysEx with a hardcoded header and device ID:
@@ -15,7 +26,7 @@ F0   MFB device ID 0x0B            F7
      (00 21 0B 04 00)
 ```
 
-- Device ID `0x0B` (decimal 11) is **hardcoded** — not user-selectable, no MIDI channel.
+- Device ID `0x0B` (decimal 11) is hardcoded, not user-selectable, no MIDI channel.
 - No reply/ack; the protocol is one-way, fire-and-forget.
 
 ## Commands
@@ -32,7 +43,7 @@ F0   MFB device ID 0x0B            F7
 select slot  →  N data pages (11 frames each)  →  end of upload
 ```
 
-Send messages with **22 ms** between them.
+Send messages with 22 ms between them.
 
 ## Message formats
 
@@ -58,7 +69,7 @@ F0  00 21 0B 04 00  05  addrLo  addrHi  subIdx  [48 data bytes]  chk  F7
 | 10–57 | 48 data bytes = 24 samples × (low7, high7) |
 | 58 | `chk` — checksum, 7 bits |
 
-- 11 sub-frames per page × 24 samples = **264 samples per page**.
+- 11 sub-frames per page × 24 samples = 264 samples per page.
 - Each sample is a 14-bit word split into 7+7-bit pairs: `[s0_lo, s0_hi, s1_lo, s1_hi, ...]`.
 - Address sent per frame = `pageStartAddr + pageIndex` (pageIndex = 0, 1, 2, ...).
 
@@ -82,7 +93,7 @@ unsigned char CalcCrc(unsigned char crc, unsigned char data) {
 }
 ```
 
-- In the wire format (`F0 ... F7`), the CRC covers the 57 bytes **after** F0 and **before** the checksum byte: `00 21 0B 04 00 05 addrLo addrHi subIdx [48 data bytes]`. F0 and F7 are excluded from the CRC computation.
+- In the wire format (`F0 ... F7`), the CRC covers the 57 bytes after F0 and before the checksum byte: `00 21 0B 04 00 05 addrLo addrHi subIdx [48 data bytes]`. F0 and F7 are excluded from the CRC computation.
 - Init `crc = 0`, feed each byte, result is 0–127 (MIDI-data-safe).
 
 ## Address map
@@ -100,13 +111,13 @@ Example page starts (bank 0): slot 0 = 0, slot 1 = 91, slot 4 = 728, slot 12 = 3
 
 ## Sample data encoding
 
-1. Decode audio file (.wav/.aif). Sample sizes are based on **44.1 kHz**; MIDI transfer runs at **48 kHz**.
+1. Decode audio file (.wav/.aif). Sample sizes are based on 44.1 kHz, the machine's playback rate; the SysEx transfer is paced at 48 kHz.
 2. Truncate to the slot's capacity (see below).
 3. Take channel 0 (no averaging).
 4. Convert float samples → 12-bit unsigned (0–4095): `(uint16_t)(sample * 32768.0 + 32768.0) >> 4`
 5. Pad to a multiple of 264.
 
-## Slot lengths
+## Slots capacity
 
 | Slot (within bank) | Max samples | Duration @ 44.1 kHz |
 |---|---|---|
@@ -114,6 +125,6 @@ Example page starts (bank 0): slot 0 = 0, slot 1 = 91, slot 4 = 728, slot 12 = 3
 | 5–12 | 44,000 | 1.0 s |
 | 13–16 | 88,000 | 2.0 s |
 
-- Files longer than the target slot are **truncated**.
+- Files longer than the target slot are truncated.
 - Recommended: samples should start at a zero crossing to avoid clicks.
 - Overwriting an existing sample replaces it.

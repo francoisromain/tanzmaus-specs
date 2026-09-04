@@ -1,4 +1,4 @@
-# MFB Tanzmaus Sample Tool — Source Walkthrough
+# MFB Tanzmaus Sample Tool, Source Walkthrough
 
 - [Source files](../mfb/tool/TanzmausSampleTool/)
 - Author: Sebastian Preller, Jan 2017
@@ -14,24 +14,15 @@
 | `Source/DragAndDropButton.cpp/.h` | Drag-and-drop file input (`.wav`, `.aif`) |
 | `Source/pBar.cpp/.h` | Progress bar widget |
 
-## Hardware Requirements
-
-- Firmware ≥ 1.6
-- MIDI input connected to interface output
-- Sequencer stopped, device in **Play/Mute mode** (REC LED off)
-
 ## Usage
 
-1. Select MIDI port in the app
+In the app:
+
+1. Select MIDI port 
 2. Select bank (0 or 1) and slot (0–15)
 3. Drag & drop `.wav` or `.aif` onto the button
-4. Press **Start Transmission**
+4. Press `Start Transmission`
 5. Overwrites existing samples at same bank/slot
-
-### Tips
-
-- Start samples at a **zero crossing** to avoid clicks
-- Files longer than the bank duration are truncated
 
 ## Protocol
 
@@ -41,19 +32,28 @@ See [sysex.md](../sysex.md) for the full SysEx protocol spec (header, commands, 
 
 ### Transfer Timing
 
-- 1056 samples between SysEx messages (22ms @48kHz)
-- Source comment says `//ca.20ms` — misleading, actual value is 22ms
-- Sent in batch via `MidiOutput::sendBlockOfMessages` at 48kHz rate
+- 1056 samples between SysEx messages (22ms @48kHz transfer rate, distinct from the machine's 44.1 kHz playback rate, see [sysex.md](../sysex.md))
+- Source comment says `//ca.20ms`, misleading, actual value is 22ms
+- Sent in batch via `MidiOutput::sendBlockOfMessages` at 48kHz transfer rate
 
 ### Page Counts
 
-Slot capacities (from [sysex.md](../sysex.md#slot-lengths)) yield:
+```cpp
+if (sampleNo < 4){ sampleSize = 22000; }
+else if (sampleNo < 12){ sampleSize = 44000; }
+else { sampleSize = 88000; }
+```
 
-| Slot | Samples | Pages |
-|---|---|---|
-| 1–4 | 22,000 | 84 |
-| 5–12 | 44,000 | 167 |
-| 13–16 | 88,000 | 334 |
+- 0-3: 22000 samples (0.5s)
+- 4-11: 44000 samples (1s)
+- 12-15: 88000 samples (2s)
+
+| Slot | Samples | Pages | Duration |
+|---|---|---|---|
+| 1–4 | 22,000 | 84 | ~0.5s |
+| 5–12 | 44,000 | 167 | ~1.0s |
+| 13–16 | 88,000 | 334 | ~2.0s |
+
 
 ### Upload Sequence
 
@@ -67,4 +67,8 @@ Implementation in `crc7.cpp`:
 
 Input: `.wav` or `.aif` via JUCE `AudioFormatManager`.
 
-Float samples are converted to 12-bit unsigned in `TanzmausSampleTool.cpp:208`. See [sysex.md](../sysex.md#sample-data-encoding) for the conversion formula.
+Float samples are converted to 12-bit unsigned in `TanzmausSampleTool.cpp:208`. See [sysex.md](../sysex.md#sample-data-encoding) for the conversion formula. 
+
+The tool does **not** resample, the file is sent at its native rate.
+
+

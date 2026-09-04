@@ -21,8 +21,53 @@ See [sysex.md](../sysex.md) for the full SysEx spec (header, commands, CRC7, add
 2. Truncate to slot capacity
 3. **Average all channels to mono**
    - Differs from the official MFB tool, which takes channel 0 only (no averaging)
-4. Convert float samples → 12-bit unsigned (see [sysex.md](../sysex.md#sample-data-encoding)):
+4. Convert float samples → 12-bit unsigned (see [sysex.md](../sysex.md#sample-data-encoding)).
 5. Pad to multiple of 264
+
+### Factory default JSON (
+  
+  
+All the 32 [factory samples](factory-samples.md) sounds are embeded in a json file : [tanzmaus-default.json](https://github.com/linuxbender/tanzmaus-app/blob/gh-pages/tanzmaus-default.json)
+
+- 32 assignments, each with `slotIndex`, `fileName`, `audioData` (base64), `uploadStatus`
+- `audioData` is raw 12-bit unsigned PCM in 16-bit LE words (no WAV header)
+- Rate: 44.1 kHz, resampled from the original 48 kHz factory default before embedding
+- "Restore to factory" uploads these 44.1 kHz samples
+
+#### Slot capacities
+
+| Slots | Official tool | Tanzmaus app JSON |
+|---|---|---|
+| sp1 1–8, sp2 1–4 | 22,000 | 22,176 |
+| sp1 9–16, sp2 5–12 | 44,000 | 44,088 / 44,352 |
+| sp2 13–16 | 88,000 | 88,176 |
+
+- Values are padded by ~176 samples beyond the tool's limits
+- sp1 slots 13–16 have 264 more samples than sp2 slots 5–12 (44,352 vs 44,088)
+
+#### Conflict
+
+The sample length from the JSON data conflict with the app's capacity logic:
+
+JSON data shows sp1/13–16 are 1s, but the interface labels them as 2s. The `yf()` function uses `index % 16`, ignoring bank-specific differences.
+
+**JSON data (asymmetric)**
+
+- sp1 13–16: 44,352 samples (1s capacity)
+- sp2 13–16: 88,176 samples (2s capacity)
+
+**`yf()` function (symmetric)**
+
+```javascript
+function yf(m) {
+  const E = m % 16;
+  return E < 4 ? "0.5s" : E < 12 ? "1s" : "2s"
+}
+```
+
+**Interface labels (symmetric)**
+
+Labels for slots 13–16 = "2s" for both sp1 and sp2.
 
 ## Upload Scheduler
 
@@ -93,24 +138,7 @@ No `onmidimessage` / MIDIInput handler exists — the protocol is strictly one-w
 
 ## Page Address Table
 
-Full mapping from [sysex.md](../sysex.md#address-map):
-
-| Bank | Slot | Page Start Address |
-|---|---|---|
-| 0 | 0 | 0 |
-| 0 | 1 | 91 |
-| 0 | 2 | 182 |
-| 0 | 3 | 273 |
-| 0 | 4 | 728 |
-| 0 | 5 | 910 |
-| ... | ... | ... |
-| 0 | 12 | 3640 |
-| 0 | 13 | 4004 |
-| 0 | 14 | 4368 |
-| 0 | 15 | 4732 |
-| 1 | 0 | 364 |
-| 1 | 1 | 455 |
-| ... | ... | ... |
+Page start addresses are computed from bank + slot as described in [sysex.md](../sysex.md#address-map) (e.g. bank 0: slot 0 = 0, slot 4 = 728, slot 12 = 3640; bank 1: slot 0 = 364).
 
 ## Worked Example: Bank 1, Slot 5 (44,000 samples)
 

@@ -2,8 +2,8 @@
 
 > An attempt to document the **MFB Tanzmaus** drum machine specifications
 
-> Disclaimer: this was made by an AI (Big Pickle, free from Opencode)
-> I can not say if it is relevant at all
+> Disclaimer: this was made with the help of an AI (Big Pickle, free from Opencode). 
+> I don't unerstand everything and there might be some errors. 
 
 - [`sysex.md`](sysex.md): Sample Upload SysEx protocol
 - [`midi-cc.md`](midi-cc.md): MIDI CC assignments for all voices, extracted from the manual
@@ -14,8 +14,10 @@ The Tanzmaus uses a STM32F303 CCT6 chip
 
 - [`firmware.md`](reverse/firmware.md) from the [MFB firmwares](mfb/firmware/)
 - [`tool.md`](reverse/tool.md) from the [source code of the MFB sample tool app](mfb/tool/TanzmausSampleTool/) (macOS + Windows) and the [sample-tool manual](mfb/tool/user_manual_sample_tool.pdf)
+- [`factory-samples.md`](reverse/factory-samples.md): factory sample specs and slot mapping
 - [`tanzmaus-app.md`](reverse/tanzmaus-app.md) from [linuxbender/tanzmaus-app](https://github.com/linuxbender/tanzmaus-app), a web-app to upload samples to the Tanzmaus
 - [`tanzmaus-reversing.md`](reverse/tanzmaus-reversing.md) from [Windfisch/tanzmaus-reversing](https://github.com/Windfisch/tanzmaus-reversing), a reverse engineering attempt at the sysex **dump** protocol
+- [`sample-rate.md`](reverse/sample-rate.md): sample playback-rate measurements
 
 ### `mfb/` official MFB source
 
