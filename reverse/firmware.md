@@ -124,26 +124,24 @@ The MCU is an **STM32F303CCT6** (Cortex-M4F, 256 KB flash, 40 KB SRAM). The init
 
 ## Image layout
 
-`fw_dispatcher.py` reads a vector table at image offset **`0x1ef`** with a compact set of entries (**claimed — see the Known issue below**):
+`fw_dispatcher.py` reads a vector table at image offset **`0x1ef`** with a compact set of entries (**claimed — see resolution below**):
 
 | Index | Word | Meaning |
 |---|---|---|
 | 0 | `0x2000a000` | Initial SP = SRAM top |
-| 1 | reset vector | grows per version |
-| 2–6 | shared handler / faults | |
+| 1 | reset vector | grows per version (V1.6: `0x08012fc5`) |
+| 2–6 | shared handler / faults (`0x08013039`) | |
 | 7–10 | `0` | reserved, not populated |
 
 The reset handler disassembles to coherent Cortex-M init code (nibble `cmp #0xf` parameter-zeroing loops, `pop {r3, pc}` epilogues). The image has a short **0x62-byte** leading zero prefix (frames 1..~3 carry all-zero payloads) before genuine code; `0x2000a000` appears exactly once in the image (a genuine constant, the SRAM-top sentinel).
 
-#### Known issue (fw_dispatcher.py — review pending)
+#### Resolution (T2a)
 
-`0x1ef` is **not 4-aligned**, but the Cortex-M exception table must be
-word-aligned for hardware fetch. The actual leading zero run is **0x62 bytes**,
-not 0x1ef; the claimed reset vector (`0x08012fc4`) decodes to a mid-function
-tail (`pop {r4,r5,pc}`), not init; and no 4-aligned SP-word + function-pointer
-cluster exists anywhere in the image. These bytes look like a coincidence of
-data rather than a real vector table. The true entry point / vector arrangement
-is unresolved.
+`0x1ef` is **not 4-aligned**, which rules out a hardware vector table — the block
+(`{0x2000a000, 0x08012fc5, repeated 0x08013039}`) is a **boot-handoff manifest**
+read by the separate bootloader, and the app itself is **fully polled** (no VTOR
+write, no NVIC table; SCB `0xE000ED00` used only for an AIRCR priority-grouping
+store). See “Static decode — Tier 2” below for the full model.
 
 ---
 
@@ -175,14 +173,36 @@ checksum bytes:  ck[i] = (value >> 7*i) & 0x7F
 
 This is one of the two values needed to originate valid firmware frames.
 
-### Columns 36 & 37 — deterministic, algorithm TBD
+### Columns 46 & 47 — packing tail, not a checksum — RESOLVED
 
-Columns 36–37 are a **5-bit field** (`col36 | col37<<4`; col36 is 4 bits, col37 is 1 bit) that is a deterministic, **non-linear** function of `(address, payload[0:36])`:
+The earlier "5-bit field at columns 36/37" was a **column-misindexing artifact**.
+Verification on the decoded bytes:
 
-- 0 conflicts over 6,645 distinct `(addr, data)` keys; depends on the address.
-- Not the sample-protocol CRC, not common CRC-5/8/16, not modular-sum/Fletcher, not byte-xor/fold, not packing leftovers, and **not XOR-linear** in any framing (address as 16 bits, 7 bits, or single byte) — so a substitution/table-based or clocked-LFSR checksum is suspected.
+- **Columns 36/37 (frame bytes 36/37) are plain 7-bit image bytes** — bit-scan across
+  all four firmware versions shows values spanning the full `0..0x7F` range. They are
+  packed into chunk bytes 22–25 of the image like any other data.
+- The small 5-bit field actually lives one frame byte-group later, at the **PAYLOAD
+  tail (frame bytes 46/47)**. With `ch = unpack7(payload)` (33 bytes):
 
-This is the **one remaining layout unknown** and only matters for *originating* frames (the 3-byte checksum — which the device also validates — is solved).
+```
+pay36[0..3] = ch[31] >> 4        (image byte 31, high nibble)
+pay36[4..6] = ch[32] & 0x07      (image byte 32, low 3 bits)
+pay37       = (ch[32] >> 3) & 0x1F
+```
+
+  Verified **0 mismatches over 13,607 full frames** (all four versions). So
+  `pay[37]` in practice is `0`/`1` and `pay[36]` is `0..15`, i.e. the transmitted
+  tail is a fixed re-encoding of the last two packed chunk bytes — NOT an
+  independent checksum. No per-frame transmitter state exists beyond this.
+
+- Related image-structure finding: for every full frame, `ch[32]` ∈ {`0x00`, `0x08`}
+  (3,382 positions verified → `image[33*k+32]` ∈ {0,8}). The value is data-dependent
+  (not address parity or a checksum function) — it is a byte the host tool writes into
+  the image stream, of unknown but uncompromising semantics. It does NOT gate frame
+  origination (any `0x00`/`0x08` value in the image reproduces the transmitted tail).
+
+**Consequence:** to originate valid frames you only need the solved 3-byte checksum —
+there is no secondary 5-bit field to compute.
 
 ---
 
@@ -191,6 +211,13 @@ This is the **one remaining layout unknown** and only matters for *originating* 
 The app image contains **no flash-programming code**: no F303 FLASH unlock keys (`0x45670123`/`0xcdef89ab`), no writes to `FLASH->CR`/`KEYR`, no SysEx OS-receive path. Startup only does standard init (SCB->AIRCR priority group, RCC clock enables).
 
 The OS-update receive/validate/flash logic therefore lives in a **separate bootloader not shipped in the `.syx`**; the file carries only the application image (whose last 4-byte-aligned words — the `0x20000161`/`0x20000165` + `0x200000bc` footer — are plausibly the hand-off data the bootloader reads). Because of this, the update code (which computes/checks the fields above) is not recoverable from the shipped artifacts alone.
+
+Scan results agree with a **separate-bootloader model**:
+- the app has **no vector-table or VTOR write**; its only use of `0xE000ED00` (SCB) is a single **AIRCR priority-grouping** store (`0x05FA0000 | group`). The design is **fully polled** (no NVIC vector table, no interrupts in app);
+- the odd-aligned block at image offset `0x1ef` (`{0x2000a000, 0x08012fc5, repeated 0x08013039}`) is the **boot-handoff manifest** a separate bootloader reads — its alignment (≠ `n*4`, words ≠ 16-bit halfword expansion) rules out an NVIC table;
+- all four versions construct the same **peripheral bases via `movw &0xffff` / `movt &0xffff0000` pairs** with a uniform low code (`0x080004E0`-family): TIM3 `0x40000400`, TIM4 `0x40000800`, TIM6 `0x40001000`, TIM7 `0x40001400`, EXTI `0x40010400`, **SPI1 `0x40013000`**, **USART1 `0x40013800`**, TIM15 `0x40014000`, TIM16 `0x40014400`, TIM17 `0x40014800`, RCC `0x40021000`, FLASH `0x40022000`, GPIOB `0x48000400`, GPIOC `0x48000800`, GPIOE `0x48001000`.
+- **USART1 = the MIDI UART** (resolved): V1.6 builds the TDR address `0x40013828` directly (`0x8010a58`), V1.62/63 the base (`0x8010e7a`); **BRR = `0x900` ⇒ 72 MHz/2304 = 31,250 baud = MIDI**; init writes CR1/CR3 only.
+- **SPI1 = the Adesto DataFlash driver** (resolved): identical construction at `0x080005F2`/`0x0800077A` in all versions; CR1 writes `0x3010`/`0x3080`, status polling via `SPI1->SR` masks `0x80` (`SPIF`) and `0x600` (`MODF`/`OVR`). This is the sample-storage read/write path (two SPI DataFlash chips on the PCB).
 
 ---
 
@@ -208,25 +235,25 @@ the firmware never replies.
 Static context (V1_63, via `fw_dispatcher.py`): the image disassembles fully
 (49,832 Thumb-2 instructions) with genuine code from near the image start; it
 uses movw/movt + offset addressing with **no 32-bit peripheral literal pools**
-for RCC/USART/GPIO, and carries USART-shaped accesses (`[rN,#0x28]`/`[rN,#0x24]`
-= TDR/RDR-style) clustered at `0x080003B6..0x0800234A`. A true `cmp #0xF0`
-(SysEx `F0`) site exists. The main remaining unknowns — exact MIDI USART
-identity and the full RX command set — are best answered empirically.
+for RCC/USART/GPIO. The access pattern clustered at `0x080003B6..0x0800234A`
+previously flagged as USART TDR/RDR (`+0x28`/`+0x24`) is actually **GPIO**
+(addressing `GPIOx->AFRH` at `+0x24` and `GPIOx->BRR` at `+0x28`, e.g.
+`mov.w r6,#0x400; movt r6,#0x4800; strh r5,[r6,#0x28]` = GPIOB->BRR → 74HC595
+LED latch). A true `cmp #0xF0` (SysEx `F0`) site exists. The main remaining
+unknowns — the full RX command set — are best answered empirically.
 
 ---
 
 ## Remaining unknowns
 
-- Exact col36/col37 algorithm (above).
 - Meaning of the header signature fields and of the final-frame footer words
   (`0x20000161`/`0x20000165` + `0x200000bc`), and of the low-SRAM addresses the
   app itself builds/reads (`0x20000164`, `0x200000cc` in V1.62/1.63).
-- The exact MIDI USART identity (the app uses an unusual constant-construction
-  pattern that evades literal-pool / `movw`/`movt` adjacency analysis; the
-  USART-shaped accesses cluster at `0x080003B6..0x0800234A` but the peripheral
-  base address could not be statically resolved).
+- Meaning of `image[33*k+32] ∈ {0x00, 0x08}` (the per-frame tail byte the host tool
+  writes). Not needed to originate frames; may be a firmware-side flag/state byte.
 - Whether the bootloader flashes the whole 256 KB or only the app region (needs
   on-device/bootloader access).
-- The true vector table / entry point — the documented `0x1ef` offset is
-  ARM-illegal (not 4-aligned) and the claimed reset vector decodes to a
-  mid-function tail, not init code.
+- The app's true entry point / how the separate bootloader jumps to it (the `0x1ef`
+  manifest `{0x2000a000, 0x08012fc5, …}` is documented above; the reset-word
+  disassembles to a mid-function tail because it is reached via the bootloader's
+  hand-off context, not as first instruction).
