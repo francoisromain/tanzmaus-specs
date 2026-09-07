@@ -2,38 +2,44 @@
 
 Reverse-engineered from the four [MFB OS update files](../mfb/firmware/)
 
-| Version | Data frames | Image bytes |
-|---|---|---|
-| 1.6 | 3383 | 111,639 |
-| 1.61 | 3392 | 111,936 |
-| 1.62 | 3415 | 112,695 |
-| 1.63 | 3417 | 112,761 |
+| Version | Data frames¹ | Final frame² | Header addr | Image bytes |
+|---|---|---|---|---|
+| 1.6 | 3382 | 48 B @ addr 3383 | 0x0D38 (3384) | 111,638 |
+| 1.61 | 3391 | 38 B @ addr 3392 | 0x0D41 (3393) | 111,926 |
+| 1.62 | 3414 | 29 B @ addr 3415 | 0x0D58 (3416) | 112,677 |
+| 1.63 | 3416 | 29 B @ addr 3417 | 0x0D5A (3418) | 112,743 |
+
+¹ full 52-byte data frames, addr 1..N-2
+² the last data frame (addr N-1) is shorter — the image is not 33-byte aligned; it carries the image tail and has no checksum field. The header frame sits at addr N.
 
 Analysis [python scripts](firmware-scripts/)
  
 | File | Contents |
 |---|---|
 | `fw_cksum.py` | Embeds the 21-bit XOR-linear checksum weight tables and verifies every frame across all four firmware versions. |
-| `fw_decoder.py` | Unpacks 7-bit MIDI-safe payload bytes back to 8-bit and reconstructs the firmware image. |
+| `fw_decoder.py` | Unpacks 7-bit MIDI-safe payload bytes back to 8-bit and reconstructs the firmware image. Verifies address contiguity and every 3-byte checksum. |
 | `fw_disasm.py` | Disassembles the decoded image to confirm the Cortex-M (Thumb-2) code. |
 | `fw_dispatcher.py` | Heuristic SysEx analysis: single-pass decode, vector-table scan, peripheral-constant reconstruction, USART-shaped access map, command-immediate inventory. See the [SysEx reply-probe runbook](sysex-probes.md). |
+| `fw_trailer.py` | Decodes the final (short) frame = the image tail: unpacks and disassembles it, lists embedded SRAM/flash words, and reports image-level checksums (global-signature checks returned negative). |
+| `fw_ramxref.py` | Raw byte-occurrence scan (decode-noise immune) plus `movw`/`movt`-adjacency and literal-pool inventory for the SRAM / peripheral addresses the app references. |
 
 ---
 
 ## Delivery
 
-A `.syx` is one sequential SysEx session: 
-- a **metadata header**, 
-- then **N data frames** (addr 1..N), 
-- then a **trailer**. 
+A `.syx` is one sequential SysEx session of **N cmd-01 frames with contiguous
+addresses 1..N**:
+- addr **1..N-2**: full **52-byte data frames**,
+- addr **N-1**: the **final (short) data frame** — the image tail, 29–48 bytes, no checksum field,
+- addr **N**: the **metadata header** frame (52 bytes), its address equals the total frame count N.
 
 Every frame shares the shell `F0 00 21 0B 04 00 01`, the MFB SysEx header, device ID `0x0B`, and command byte `0x01` (firmware upload).
 
 | Segment | Length | Count |
 |---|---|---|
+| Data frames | 52 bytes | N-2 |
+| Final (image tail) | 29–48 bytes | 1 |
 | Metadata header | 52 bytes | 1 |
-| Data frames | 52 bytes | N |
-| Trailer | 29–48 bytes (varies per version) | 1 |
 
 Data-frame layout (52 bytes):
 
@@ -50,7 +56,7 @@ F0  00 21 0B 04 00  01  00  addrHi addrLo  [38 payload]  ck0 ck1 ck2  F7
 
 ### Metadata header frame
 
-The **first** frame carries version/signature metadata. Its address equals **the total frame count** (a length/count sentinel), i.e. one past the data-frame address range.
+The **first** frame carries version/signature metadata. Its address equals **the total frame count** (a length/count sentinel), i.e. two past the last data-frame address.
 
 | Version | Header addr (== total frames) | Signature bytes `data[10:24]` |
 |---|---|---|
@@ -65,34 +71,50 @@ V1.61 header frame, field-by-field:
 ```
 F0  00 21 0B 04 00  01  00  1a 41  00 00 3c 60 0b 20 00 53 14 ... 00 01  1f 01 2a  F7
 ```
-- address `0x1A41` = `(0x1A<<7)|0x41` = 3393 = 3391 data + trailer + header
+- address `0x1A41` = `(0x1A<<7)|0x41` = 3393 = 3391 data + final (image tail) + header
 - `data[0:16]` = `00 00 3c 60 0b 20 00 53 14 00 00 00 00 00 00 ...` signature
 - data tail `00 01` = end marker; checksum = `1f 01 2a`
 
-### Trailer frame
+### Final frame — image tail
 
-The **final** frame is shorter than 52 bytes (29–48) and closes the session. Its address sits at `total_frames - 1` (one less than the header's), consistent with a closing marker:
+The **final data frame** (addr `N-1`) is shorter than 52 bytes because the image
+is not a multiple of 33 bytes: it is the last chunk of the firmware itself, sent
+in a partial frame (no checksum field). Unpacked with the same LSB-first 7→8
+rule, it yields the end of the flash image — a small Thumb-2 routine
+(`70 47` = `bx lr`) followed by 4-byte-aligned RAM words that are stable across
+all four versions:
 
-| Version | Trailer length | Bytes after `F0 00 21 0B 04 00 01 00` |
+| Version | Frame len | Unpacked tail (bytes) |
 |---|---|---|
-| 1.6 | 48 | `1a 37 11 24 68 02 06 0b 5a 0c ... 5d 01 41 F7` |
-| 1.61 | 38 | `1a 40 42 38 08 54 1e 02 08 2c ... 5f 00 24 F7` |
-| 1.62 | 29 | `1a 57 70 0e 01 78 1b 2c 00 ... 7c 00 75 F7` |
-| 1.63 | 29 | `1a 59 70 0e 01 78 1b 2c 00 ... 78 01 7b F7` |
+| 1.6 | 48 | `11 12` + `str r2,[r3,#4] · ldr r0,[r3,#4] · ldr r1,[r3] · adds r2,r0,#1 · eor r0,r2,r1,lsr#8 · str r0,[r3,#4] · bx lr` + `65 01 00 20` `bc 00 00 20` `80 40 37 10` |
+| 1.61 | 38 | `adds r2,r0,#1 · eor r0,r2,r1,lsr#8 · str r0,[r3,#4] · bx lr` + `65 01 00 20` `bc 00 00 20` `02 5f 00` |
+| 1.62 | 29 | `bx lr` + `61 01 00 20` `bc 00 00 20` `00 f8 80` |
+| 1.63 | 29 | `bx lr` + `61 01 00 20` `bc 00 00 20` `00 f0 81` |
 
-Unpacked, the trailer yields per-version **RAM pointers** (`0x20000161`/`0x20000165`, `0x200000bc`); the exact payload meaning (global image checksum / verify command / done marker) is undetermined.
+The words (LE, so `65 01 00 20` = `0x20000165`) are **`0x20000165`** (V1.6/1.61)
+or **`0x20000161`** (V1.62/1.63) plus **`0x200000bc`** in every version. They are
+4-byte aligned, sit at the very end of the image, and raw byte-occurrence scans
+show the app code never references them (each appears exactly once per image) —
+they are a small **metadata/boot footer**, most likely consumed by the update
+mechanism rather than the app. Note the app *does* reference nearby low-SRAM
+addresses heavily: V1.62/1.63 build/use `0x20000164` (16 occurrences) and
+`0x200000cc` (13), V1.6/1.61 use different low-SRAM words (`0x200000da`,
+`0x2000013e`, …), i.e. the app's RAM layout shifts between versions.
+
+Image-level checksums (CRC32 / CRC-16-CRC_HQX / XOR8 / SUM8 over the image body)
+do **not** match any tail word: the tail is not a global image signature.
 
 ---
 
 ## Reconstructing the image
 
-The 38 payload bytes are **not** raw data — they are MIDI-safe (7-bit) and must be re-packed to 8-bit, **LSB-first**, **per frame** (reset the accumulator each frame), then concatenated **in address order**, excluding the metadata header and trailer. Image base is `0x08000000` (STM32F303 flash origin).
+The 38 payload bytes are **not** raw data — they are MIDI-safe (7-bit) and must be re-packed to 8-bit, **LSB-first**, **per frame** (reset the accumulator each frame), then concatenated **in address order**, excluding only the metadata header frame (addr N). The final short frame (addr N-1) is part of the image. Image base is `0x08000000` (STM32F303 flash origin).
 
 ```
 per frame: acc |= (byte & 0x7f) << nb; nb += 7; emit a byte when nb >= 8
 ```
 
-Image sizes are listed above (all < 256 KB flash). Addressing starts with an all-zero leading region (see "Image layout"). Verified: the trailer, unpacked alone, yields genuine Cortex-M Thumb-2 code (`70 47` = `bx lr`), proving the transform is correct.
+Image sizes are listed above (all < 256 KB flash). Addressing starts with an all-zero leading region (see "Image layout"). Verified: the final frame, unpacked alone, yields genuine Cortex-M Thumb-2 code (`70 47` = `bx lr`), proving the transform is correct.
 
 ---
 
@@ -111,7 +133,7 @@ The MCU is an **STM32F303CCT6** (Cortex-M4F, 256 KB flash, 40 KB SRAM). The init
 | 2–6 | shared handler / faults | |
 | 7–10 | `0` | reserved, not populated |
 
-The reset handler disassembles to coherent Cortex-M init code (nibble `cmp #0xf` parameter-zeroing loops, `pop {r3, pc}` epilogues). The image flashes at base `0x08000000` with **no VTOR rebase** needed; its ~0x1ef-byte leading zero prefix (equivalently, frames 1..~27 carry all-zero payloads) is reserved descriptor/boot space.
+The reset handler disassembles to coherent Cortex-M init code (nibble `cmp #0xf` parameter-zeroing loops, `pop {r3, pc}` epilogues). The image has a short **0x62-byte** leading zero prefix (frames 1..~3 carry all-zero payloads) before genuine code; `0x2000a000` appears exactly once in the image (a genuine constant, the SRAM-top sentinel).
 
 #### Known issue (fw_dispatcher.py — review pending)
 
@@ -131,7 +153,7 @@ Two fields cover the frame.
 
 ### 3-byte checksum (bytes 48–50) — RECOVERED
 
-A **21-bit XOR-linear (GF(2)) code** over the 16-bit frame **address** and **all 38 payload bytes** (including col36/37). Verified **0 mismatches over 13,604 data frames** across all four versions.
+A **21-bit XOR-linear (GF(2)) code** over the 16-bit frame **address** and **all 38 payload bytes** (including col36/37). Verified **0 mismatches over 13,607 frames** (all data frames plus the four metadata header frames, whose checksum is computed on the 38 payload bytes the same way).
 
 - Same (address, payload) ⇒ same checksum — 0 conflicts over 10,675 keys.
 - The middle byte is always `0x00`/`0x01` — it carries the high bit of the 21-bit
@@ -168,7 +190,7 @@ This is the **one remaining layout unknown** and only matters for *originating* 
 
 The app image contains **no flash-programming code**: no F303 FLASH unlock keys (`0x45670123`/`0xcdef89ab`), no writes to `FLASH->CR`/`KEYR`, no SysEx OS-receive path. Startup only does standard init (SCB->AIRCR priority group, RCC clock enables).
 
-The OS-update receive/validate/flash logic therefore lives in a **separate bootloader not shipped in the `.syx`**; the file carries only the application image. Because of this, the update code (which computes/checks the fields above) is not recoverable from the shipped artifacts alone.
+The OS-update receive/validate/flash logic therefore lives in a **separate bootloader not shipped in the `.syx`**; the file carries only the application image (whose last 4-byte-aligned words — the `0x20000161`/`0x20000165` + `0x200000bc` footer — are plausibly the hand-off data the bootloader reads). Because of this, the update code (which computes/checks the fields above) is not recoverable from the shipped artifacts alone.
 
 ---
 
@@ -196,7 +218,9 @@ identity and the full RX command set — are best answered empirically.
 ## Remaining unknowns
 
 - Exact col36/col37 algorithm (above).
-- Meaning of the header signature fields and trailer payload.
+- Meaning of the header signature fields and of the final-frame footer words
+  (`0x20000161`/`0x20000165` + `0x200000bc`), and of the low-SRAM addresses the
+  app itself builds/reads (`0x20000164`, `0x200000cc` in V1.62/1.63).
 - The exact MIDI USART identity (the app uses an unusual constant-construction
   pattern that evades literal-pool / `movw`/`movt` adjacency analysis; the
   USART-shaped accesses cluster at `0x080003B6..0x0800234A` but the peripheral

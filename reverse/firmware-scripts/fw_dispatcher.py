@@ -272,10 +272,14 @@ def main(argv):
     print("\n== adjacent movw/movt peripheral constants ==")
     pairs = adj_movw_movt(insns)
     periphs = {0x40004400: "USART2", 0x40004800: "USART3", 0x40004C00: "UART4",
-               0x40005000: "UART5", 0x40013800: "USART1", 0x40014400: "TIM16",
-               0x40021000: "RCC", 0x48000000: "GPIOA", 0x48000400: "GPIOB",
-               0x48000800: "GPIOC", 0x48000C00: "GPIOD", 0x40020000: "DMA1",
-               0x40013000: "SPI1", 0x40005400: "I2C1", 0xE000ED00: "SCB"}
+               0x40005000: "UART5", 0x40013800: "USART1", 0x40010000: "SYSCFG+COMP",
+               0x40010400: "EXTI", 0x40007000: "PWR", 0x40014400: "TIM16",
+               0x40014000: "TIM15", 0x40014800: "TIM17", 0x40021000: "RCC",
+               0x40022000: "FLASH", 0x40023000: "CRC", 0x48000000: "GPIOA",
+               0x48000400: "GPIOB", 0x48000800: "GPIOC", 0x48000C00: "GPIOD",
+               0x48001000: "GPIOE", 0x48001400: "GPIOF", 0x40020000: "DMA1",
+               0x40020400: "DMA2", 0x40013000: "SPI1", 0x40005400: "I2C1",
+               0x50000000: "ADC1-2", 0x50000400: "ADC3-4", 0xE000ED00: "SCB"}
     for base in sorted(pairs):
         tag = periphs.get(base)
         if tag or base >> 16 in (0x4000, 0x4001, 0x4002, 0x4800, 0x5000):

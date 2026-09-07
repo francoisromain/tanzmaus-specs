@@ -5,7 +5,7 @@ Recovered empirically from the official .syx files. The 3-byte checksum is
 an XOR-linear (GF(2)) code over the frame's address (bytes 8-9, up to 16 bits)
 and the 38 payload bytes (cols 10-47, 7 usable bits each). bit 7 of every
 payload byte contributes 0 (MIDI-safe 7-bit values). Verified 0 mismatches
-over all 13,604 firmware data frames across V1.6/V1.61/V1.62/V1.63.
+over all 13,607 frames (data + metadata header) across V1.6/V1.61/V1.62/V1.63.
 
 Recovery method (see firmware.md, "3-byte frame checksum"):
   - Deterministic: same (address, 38 payload bytes) => same checksum
