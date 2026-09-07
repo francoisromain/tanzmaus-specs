@@ -48,7 +48,7 @@ The first 16 bits of each pattern are the pattern id + `00`, and are stripped so
 
 ---
 
-## Pattern Data Layout (0x1000 bytes / ~4 KB per pattern)
+## Pattern Data Layout (0xDA2 = 3490 bytes per pattern)
 
 Decoded map (from `README.md` and `parse_pattern.py`; box notation `xx - yy` = inclusive byte range):
 
@@ -63,12 +63,16 @@ Decoded map (from `README.md` and `parse_pattern.py`; box notation `xx - yy` = i
 01d5 - 02b4  flam data
 02b5         00
 02b6 - 0a75  knob data: BD, SD, SP1, SP2, CP, TT in that order
-0a76 - 0d95  LFO data: BD, CP, TT, SP1, SP2 in that order
-              32x 2 byte little-endian: data = amount
-              32x 1 byte lfo speed   (1..12 = 00 30 20 18 10 0c 08 06 05 04 03 01)
-              31x 1 byte lfo waveform (0,1,2,3)
-              (source README describes these fields; see also the
-               0xa0-byte block model below - the two views aren't fully reconciled)
+0a76 - 0d95  LFO data: BD, CP, TT, SP1, SP2 in that order,
+              5 blocks x 0xa0 bytes, each 5 sub-blocks of 0x20:
+              +00  step data: 32 x 1 byte, 0x00=off / 0x01 / 0x02 / 0x03
+              +20  amount: 2-byte little-endian words (16 confirmed per
+                   block; likely 32 spanning the next sub-block - unconfirmed)
+              +40  always 0x00 in this dump (unconfirmed)
+              +60  speed: 32 x 1 byte, values in the 0x04..0x0c range,
+                   subset matching {00 30 20 18 10 0c 08 06 05 04 03 01}
+              +80  waveform?: 32 x 1 byte, sparse values 0x01/0x02/0x03
+              (confirmed against bank-dump-baseline.syx, all 16 patterns)
 0d96         ?? TODO
 0d97         tempo multiplier / scale (0x60=16ths, 0x30=8ths)
 0d98         sp2 lfo mute (80 vs 00)
@@ -91,13 +95,13 @@ Per-instrument step data blocks:
 | SP1 | 0140 - 017f | 0536 - 06b5 | 32 x 12 bytes |
 | SP2 | 0180 - 01bf | 06b6 - 0835 | 32 x 12 bytes |
 
-LFO blocks (each 0xa0 bytes): 0x20 step data (80 vs 00), 0x20 amount, then 3 unknown sub-blocks of 0x20.
-
-*(This block model is the README's other, partial view of the same region — the field-level list above (amount/speed/waveform) is not fully reconciled with the 5×0x20 sub-block layout.)*
+LFO blocks (each 0xa0 bytes, 5 sub-blocks of 0x20): step data, amount (2-byte LE words), then +0x40 (always zero in this dump), +0x60 (likely speed) and +0x80 (likely waveform) — see the map above. Block starts:
 
 ```
 bdlfo  0a76   cplfo  0b16   ttlfo  0bb6   sp1lfo  0c56   sp2lfo  0cf6
 ```
+
+The block structure and the fields above were confirmed against `bank-dump-baseline.syx` (all 16 patterns); the exact meaning of the +0x40/+0x60/+0x80 sub-blocks is not fully resolved.
 
 ### Encodings learned
 
@@ -122,13 +126,16 @@ python3 parse_pattern.py  file.syx PATTERN_NUMBER           # tracker view
 
 ## Shared Header
 
-The bank dump uses the same MFB SysEx shell as the other Tanzmaus sub-commands: header prefix `F0 00 21 0B 04 00`, command byte `0x03` (bank dump) distinct from the firmware `0x01` and sample `0x05`/`0x06`/`0x07` commands. Device ID `0x0B` is hardcoded throughout.
+The bank dump uses the same MFB SysEx shell as the other Tanzmaus sub-commands: header prefix `F0 00 21 0B 04 00`, command byte `0x03` (bank dump) distinct from the firmware `0x01` and sample `0x05`/`0x06`/`0x07` commands. 
+
+Device ID `0x0B` is hardcoded throughout.
 
 ---
 
 ## Outstanding Unknowns
 
+- LFO block internals: the exact amount width (16 confirmed 2-byte LE words; a second half in the always-zero +0x40 sub-block would make 32), the speed vocabulary (`0x09`, `0x60` are not in the documented speed map), and the waveform field size (31 vs 32). Needs captures with LFOs explicitly programmed.
 - 1 unknown byte at `0d96`
 - 7 always-zero(?) bytes
-- 2 bytes at `0d9e-0d9f` that might be a checksum
+- 2 bytes at `0d9e-0d9f` that might be a checksum (in this dump: `6b 32`)
 - the identity of the 8th mirrored "last step" value at `01c0-01c7`

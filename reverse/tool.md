@@ -44,15 +44,11 @@ else if (sampleNo < 12){ sampleSize = 44000; }
 else { sampleSize = 88000; }
 ```
 
-- 0-3: 22000 samples (0.5s)
-- 4-11: 44000 samples (1s)
-- 12-15: 88000 samples (2s)
-
 | Slot | Samples | Pages | Duration |
 |---|---|---|---|
-| 1–4 | 22,000 | 84 | ~0.5s |
-| 5–12 | 44,000 | 167 | ~1.0s |
-| 13–16 | 88,000 | 334 | ~2.0s |
+| 0-3 | 22,000 | 84 | ~0.5s |
+| 4-11 | 44,000 | 167 | ~1.0s |
+| 12-15 | 88,000 | 334 | ~2.0s |
 
 
 ### Upload Sequence
@@ -69,6 +65,6 @@ Input: `.wav` or `.aif` via JUCE `AudioFormatManager`.
 
 Float samples are converted to 12-bit unsigned in `TanzmausSampleTool.cpp:208`. See [sysex.md](../sysex.md#sample-data-encoding) for the conversion formula. 
 
-The tool does **not** resample, the file is sent at its native rate.
+The tool does **not** resample: the file is sent at its native rate. The machine always plays at 44.1 kHz, so it has pitch consequences for mismatched source rates (see [factory-samples.md](factory-samples.md)).
 
 

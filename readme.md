@@ -3,7 +3,7 @@
 > An attempt to document the **MFB Tanzmaus** drum machine specifications
 
 > Disclaimer: this was made with the help of an AI (Big Pickle, free from Opencode). 
-> I don't unerstand everything and there might be some errors. 
+> I don't understand everything and there might be some errors. 
 
 - [`sysex.md`](sysex.md): Sample Upload SysEx protocol
 - [`midi-cc.md`](midi-cc.md): MIDI CC assignments for all voices, extracted from the manual

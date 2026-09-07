@@ -24,7 +24,7 @@ Usage:
 
 Heuristic scope: no full control-flow graph is built. The command set is
 inferred from compare/site statistics and must be cross-checked against the
-live probe results (tanzmaus-tmp/sysex-probes.md).
+live probe results (reverse/sysex-probes.md).
 """
 from __future__ import annotations
 

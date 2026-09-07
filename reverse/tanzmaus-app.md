@@ -24,10 +24,9 @@ See [sysex.md](../sysex.md) for the full SysEx spec (header, commands, CRC7, add
 4. Convert float samples → 12-bit unsigned (see [sysex.md](../sysex.md#sample-data-encoding)).
 5. Pad to multiple of 264
 
-### Factory default JSON (
+### Factory default JSON (tanzmaus-default.json)
   
-  
-All the 32 [factory samples](factory-samples.md) sounds are embeded in a json file : [tanzmaus-default.json](https://github.com/linuxbender/tanzmaus-app/blob/gh-pages/tanzmaus-default.json)
+  All the 32 [factory samples](factory-samples.md) sounds are embeded in a json file : [tanzmaus-default.json](https://github.com/linuxbender/tanzmaus-app/blob/gh-pages/tanzmaus-default.json)
 
 - 32 assignments, each with `slotIndex`, `fileName`, `audioData` (base64), `uploadStatus`
 - `audioData` is raw 12-bit unsigned PCM in 16-bit LE words (no WAV header)

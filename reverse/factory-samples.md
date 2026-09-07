@@ -22,7 +22,7 @@ When uploaded with the official tool (without resampling), the sounds play ~1.5 
 
 ## Slot mapping
 
-Make the samples fit the [slots capacity](../sysex.md#slot-lengths).  
+Make the samples fit the [slots capacity](../sysex.md#slots-capacity).  
 
 | File | Slot | File | Slot | File | Slot |
 |---|---|---|---|---|---|

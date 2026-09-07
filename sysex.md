@@ -15,6 +15,17 @@ Use this to build an app that uploads samples to the Tanzmaus.
 - Start samples at a zero crossing to avoid clicks
 - Files longer than the bank duration are truncated
 
+## Numbering convention
+
+The wire protocol is 0-based, but the hardware front panel is 1-based:
+
+| | Front panel | Wire protocol |
+|---|---|---|
+| Bank | SP1 / SP2 | 0 / 1 |
+| Slot | 1–16 | 0–15 |
+
+Wire value = panel value − 1. E.g. `/SP1/13` on the panel = bank 0, slot 12 on the wire.
+
 ## Header
 
 Every message is wrapped in SysEx with a hardcoded header and device ID:
@@ -98,20 +109,24 @@ unsigned char CalcCrc(unsigned char crc, unsigned char data) {
 
 ## Address map
 
-Bank (`sampleDest`) and slot (`sampleNo`, 0-based) map to a starting page address. The bank is encoded in the address, not in slot-select.
+`bank` (0/1) and `slot` (0–15) map to a starting page address. The bank is encoded in the address, not in slot-select.
 
 ```
-pageStartAddr =
-  sampleNo < 4    ? (sampleDest * 4 + sampleNo) * 91
-  : sampleNo < 12 ? 728 + (sampleDest * 8 + (sampleNo - 4)) * 182
-  :                  3640 + (sampleDest * 4 + (sampleNo - 12)) * 364
+if slot < 4:
+    pageStartAddr = (bank * 4 + slot) * 91
+elif slot < 12:
+    pageStartAddr = 728 + (bank * 8 + (slot - 4)) * 182
+else:
+    pageStartAddr = 3640 + (bank * 4 + (slot - 12)) * 364
 ```
 
 Example page starts (bank 0): slot 0 = 0, slot 1 = 91, slot 4 = 728, slot 12 = 3640.
 
 ## Sample data encoding
 
-1. Decode audio file (.wav/.aif). Sample sizes are based on 44.1 kHz, the machine's playback rate; the SysEx transfer is paced at 48 kHz.
+1. Decode audio file (.wav/.aif). Two independent clocks are involved:
+   - **44.1 kHz playback**: the machine's DAC rate; sets pitch and the slot capacities below (22,000 samples = 0.5 s).
+   - **48 kHz transfer pacing**: the SysEx message cadence (22 ms between messages); does not affect pitch or content.
 2. Truncate to the slot's capacity (see below).
 3. Take channel 0 (no averaging).
 4. Convert float samples → 12-bit unsigned (0–4095): `(uint16_t)(sample * 32768.0 + 32768.0) >> 4`
@@ -119,11 +134,11 @@ Example page starts (bank 0): slot 0 = 0, slot 1 = 91, slot 4 = 728, slot 12 = 3
 
 ## Slots capacity
 
-| Slot (within bank) | Max samples | Duration @ 44.1 kHz |
-|---|---|---|
-| 1–4 | 22,000 | 0.5 s |
-| 5–12 | 44,000 | 1.0 s |
-| 13–16 | 88,000 | 2.0 s |
+| Slots (wire) | Front panel | Max samples | Duration @ 44.1 kHz |
+|---|---|---|---|
+| 0–3 | 1–4 | 22,000 | 0.5 s |
+| 4–11 | 5–12 | 44,000 | 1.0 s |
+| 12–15 | 13–16 | 88,000 | 2.0 s |
 
 - Files longer than the target slot are truncated.
 - Recommended: samples should start at a zero crossing to avoid clicks.

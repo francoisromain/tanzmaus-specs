@@ -16,9 +16,7 @@ Analysis [python scripts](firmware-scripts/)
 | `fw_cksum.py` | Embeds the 21-bit XOR-linear checksum weight tables and verifies every frame across all four firmware versions. |
 | `fw_decoder.py` | Unpacks 7-bit MIDI-safe payload bytes back to 8-bit and reconstructs the firmware image. |
 | `fw_disasm.py` | Disassembles the decoded image to confirm the Cortex-M (Thumb-2) code. |
-| `fw_dispatcher.py` | Heuristic SysEx analysis: single-pass decode, vector-table scan, peripheral-constant reconstruction, USART-shaped access map, command-immediate inventory. See the "Empirical probes" section below. |
-| `cap.sh` | Capture-and-send helper for empirical SysEx probing (see `sysex-probes.md`). |
-| `sysex-probes.md` | Runbook for the SysEx reply-probe sweep. |
+| `fw_dispatcher.py` | Heuristic SysEx analysis: single-pass decode, vector-table scan, peripheral-constant reconstruction, USART-shaped access map, command-immediate inventory. See the [SysEx reply-probe runbook](sysex-probes.md). |
 
 ---
 
@@ -104,7 +102,7 @@ The MCU is an **STM32F303CCT6** (Cortex-M4F, 256 KB flash, 40 KB SRAM). The init
 
 ## Image layout
 
-The vector table sits at image offset **`0x1ef`** with a compact set of entries:
+`fw_dispatcher.py` reads a vector table at image offset **`0x1ef`** with a compact set of entries (**claimed — see the Known issue below**):
 
 | Index | Word | Meaning |
 |---|---|---|
@@ -115,7 +113,15 @@ The vector table sits at image offset **`0x1ef`** with a compact set of entries:
 
 The reset handler disassembles to coherent Cortex-M init code (nibble `cmp #0xf` parameter-zeroing loops, `pop {r3, pc}` epilogues). The image flashes at base `0x08000000` with **no VTOR rebase** needed; its ~0x1ef-byte leading zero prefix (equivalently, frames 1..~27 carry all-zero payloads) is reserved descriptor/boot space.
 
-> **Caveat (fw_dispatcher.py, review pending):** the "vector table at 0x1ef" reading is questionable. `0x1ef` is not 4-aligned, and the Cortex-M exception table must be word-aligned for hardware fetch; the leading zero run is actually **0x62 bytes** long, not 0x1ef; decoding the claimed reset vector (`0x08012fc4`) yields a mid-function tail (`pop {r4,r5,pc}`), not init; and no 4-aligned SP-word + function-pointer cluster exists anywhere in the image. Those bytes look like a coincidence of data rather than a real vector table. The true entry point / vector arrangement (if any, given the shipped bootloader jumps straight in) is unresolved.
+#### Known issue (fw_dispatcher.py — review pending)
+
+`0x1ef` is **not 4-aligned**, but the Cortex-M exception table must be
+word-aligned for hardware fetch. The actual leading zero run is **0x62 bytes**,
+not 0x1ef; the claimed reset vector (`0x08012fc4`) decodes to a mid-function
+tail (`pop {r4,r5,pc}`), not init; and no 4-aligned SP-word + function-pointer
+cluster exists anywhere in the image. These bytes look like a coincidence of
+data rather than a real vector table. The true entry point / vector arrangement
+is unresolved.
 
 ---
 
@@ -168,19 +174,14 @@ The OS-update receive/validate/flash logic therefore lives in a **separate bootl
 
 ## Device ID
 
-`0x0B` is constant across every official firmware image: the device ID is hardcoded, has **no user-configurable selection step** in the OS-update procedure, and two chained Tanzmauses cannot be addressed individually.
+`0x0B` is constant across every official firmware image: the device ID is hardcoded and two chained Tanzmauses cannot be addressed individually.
 
 ## Empirical probes
 
-Question: does the Tanzmaus ever **transmit** SysEx in response to a received
-message (identity / handshake / reply), or is the firmware fire-and-forget?
-
-Runbook and capture helper: `firmware-scripts/sysex-probes.md` and
-`firmware-scripts/cap.sh`. Generated probe files: `probes/*.syx`.
-Baseline bank dump preserved at `tanzmaus-tmp/bank-dump-baseline.syx`
-(67,280 bytes, cmd `0x03` dump shell
-`F0 00 21 0B 04 00 03 …` — note: the real capture is `04 00 03`, i.e. the
-transfer-class bytes `04 00` are part of the header).
+Whether the Tanzmaus ever **transmits** SysEx in response to a received message
+(identity / handshake / reply) is answered empirically in the
+[SysEx reply-probe runbook](sysex-probes.md). Short answer: **fire-and-forget** —
+the firmware never replies.
 
 Static context (V1_63, via `fw_dispatcher.py`): the image disassembles fully
 (49,832 Thumb-2 instructions) with genuine code from near the image start; it
@@ -189,39 +190,6 @@ for RCC/USART/GPIO, and carries USART-shaped accesses (`[rN,#0x28]`/`[rN,#0x24]`
 = TDR/RDR-style) clustered at `0x080003B6..0x0800234A`. A true `cmp #0xF0`
 (SysEx `F0`) site exists. The main remaining unknowns — exact MIDI USART
 identity and the full RX command set — are best answered empirically.
-
-### Results (2026-09-06)
-
-**Verdict: fire-and-forget.** The firmware never transmits SysEx in response to a
-received message. All 13 probes returned zero bytes:
-
-| Test | Message | Bytes received | Reply? |
-|---|---|---|---|
-| A | ident-7F (`F0 7E 7F 06 01 F7`) | 0 | No |
-| A | ident-0B (`F0 7E 0B 06 01 F7`) | 0 | No |
-| A | ident-7D (`F0 7E 7D 06 01 F7`) | 0 | No |
-| B | cmd03-noarg (`F0 00 21 0B 04 00 03 F7`) | 0 | No |
-| B | cmd03-zeroaddr (`F0 00 21 0B 04 00 03 00 01 F7`) | 0 | No |
-| C | sweep-00 (`F0 00 21 0B 04 00 00 00 01 F7`) | 0 | No |
-| C | sweep-02 | 0 | No |
-| C | sweep-04 | 0 | No |
-| C | sweep-08 | 0 | No |
-| C | sweep-10 | 0 | No |
-| C | sweep-20 | 0 | No |
-| C | sweep-40 | 0 | No |
-| C | sweep-7F | 0 | No |
-
-Notes:
-
-- The bank dump (`cmd 0x03`) is the only proven TX path (triggered via
-  front-panel Shift+Step 9, producing 67,280 bytes). Sending it over MIDI
-  produces no response — confirming the dump path is front-panel-gated only.
-- The Universal SysEx identity protocol is not supported.
-- The curated command sweep tested representative bytes across the `0x00..0x7F`
-  range; no response to any.
-- A boot/idle sniff was not performed (the machine transmits nothing while
-  idle, consistent with the fire-and-forget finding above).
-- Handshaking/blocking changes remain on hold pending the author's decision.
 
 ---
 

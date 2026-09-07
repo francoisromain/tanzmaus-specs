@@ -17,8 +17,7 @@ amidi -l                              # device must be present
 fuser -v /dev/snd/midi*hw:*2* 2>/dev/null; ls -l /dev/snd/ | rg midi
 ```
 
-If a DAW (Bitwig) has the port open you will see EBUSY on send; free it in the DAW
-first (see `midi-debug.md`).
+If a DAW (Bitwig) has the port open you will see EBUSY on send; free it in the DAW first.
 
 ## Capture-and-send helper
 
@@ -36,14 +35,14 @@ cap() {
 ```
 
 Run the machine fully booted, sequencer idle/stopped (same state as the successful
-front-panel dump baseline `tanzmaus-tmp/bank-dump-baseline.syx`).
+front-panel dump baseline `sysex-probes/bank-dump-baseline.syx`).
 
 ## Test A — Universal SysEx identity requests
 
 ```sh
-cap ident-7F tanzmaus-specs/reverse/probes/ident-7F.syx
-cap ident-0B tanzmaus-specs/reverse/probes/ident-0B.syx
-cap ident-7D tanzmaus-specs/reverse/probes/ident-7D.syx
+cap ident-7F tanzmaus-specs/reverse/sysex-probes/ident-7F.syx
+cap ident-0B tanzmaus-specs/reverse/sysex-probes/ident-0B.syx
+cap ident-7D tanzmaus-specs/reverse/sysex-probes/ident-7D.syx
 ```
 
 Any response looks like `F0 7E <id> 06 02 ... F7`.
@@ -54,8 +53,8 @@ The front-panel dump is `F0 00 21 0B 04 00 03 <addr> <data> ... F7`. Does the ma
 honour it **received over MIDI** (RX → TX, i.e. a reply path)?
 
 ```sh
-cap dump-03-noarg tanzmaus-specs/reverse/probes/cmd03-noarg.syx
-cap dump-03-zeroaddr tanzmaus-specs/reverse/probes/cmd03-zeroaddr.syx
+cap dump-03-noarg tanzmaus-specs/reverse/sysex-probes/cmd03-noarg.syx
+cap dump-03-zeroaddr tanzmaus-specs/reverse/sysex-probes/cmd03-zeroaddr.syx
 ```
 
 If either produces a 67,280-byte capture (identical to the baseline dump) we have
@@ -70,11 +69,11 @@ sample uploads known silent).
 
 ```sh
 for c in 00 02 04 08 10 20 40 7f; do
-  cap sweep-$c "tanzmaus-specs/reverse/probes/sweep-$c.syx"
+  cap sweep-$c "tanzmaus-specs/reverse/sysex-probes/sweep-$c.syx"
 done
 # optional full sweep
 for c in 00 02 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 11 12 13 14 15 16 20 30 40 50 60 70 7f; do
-  cap sweep-$c "tanzmaus-specs/reverse/probes/sweep-$c.syx"
+  cap sweep-$c "tanzmaus-specs/reverse/sysex-probes/sweep-$c.syx"
 done
 ```
 
@@ -92,15 +91,38 @@ A non-empty capture at boot = startup SysEx banner (a handshake/version poke we 
 
 ## Recording results
 
-Fill the table below; results then get merged into
-`tanzmaus-specs/reverse/firmware.md` under "Empirical probes".
+**Completed 2026-09-06 — verdict: fire-and-forget.** The machine never transmits
+SysEx in response to a received message. All 13 probes returned zero bytes:
 
 | Test | Message | Bytes received | Reply? |
 |---|---|---|---|
-| A | ident-7F  | | |
-| A | ident-0B  | | |
-| A | ident-7D  | | |
-| B | cmd03-noarg | | |
-| B | cmd03-zeroaddr | | |
-| C | sweep-00 … | | |
-| D | boot sniff | | |
+| A | ident-7F (`F0 7E 7F 06 01 F7`) | 0 | No |
+| A | ident-0B (`F0 7E 0B 06 01 F7`) | 0 | No |
+| A | ident-7D (`F0 7E 7D 06 01 F7`) | 0 | No |
+| B | cmd03-noarg (`F0 00 21 0B 04 00 03 F7`) | 0 | No |
+| B | cmd03-zeroaddr (`F0 00 21 0B 04 00 03 00 01 F7`) | 0 | No |
+| C | sweep-00 (`F0 00 21 0B 04 00 00 00 01 F7`) | 0 | No |
+| C | sweep-02 | 0 | No |
+| C | sweep-04 | 0 | No |
+| C | sweep-08 | 0 | No |
+| C | sweep-10 | 0 | No |
+| C | sweep-20 | 0 | No |
+| C | sweep-40 | 0 | No |
+| C | sweep-7F | 0 | No |
+
+Notes:
+
+- The bank dump (`cmd 0x03`) is the only proven TX path, triggered via
+  front-panel Shift+Step 9 and preserved in `sysex-probes/bank-dump-baseline.syx`
+  (67,280 bytes, shell `F0 00 21 0B 04 00 03 …` — note: the real capture is
+  `04 00 03`, i.e. the transfer-class bytes `04 00` are part of the header).
+  Sending it over MIDI produces no response — confirming the dump path is
+  front-panel-gated only.
+- The Universal SysEx identity protocol is not supported.
+- The curated command sweep tested representative bytes across the `0x00..0x7F`
+  range; no response to any.
+- A boot/idle sniff was not performed (the machine transmits nothing while
+  idle, consistent with the fire-and-forget finding above).
+- Handshaking/blocking changes remain on hold pending the author's decision.
+
+Re-running the sweep above should produce the same outcome.
