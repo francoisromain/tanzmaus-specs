@@ -56,7 +56,7 @@ Decoded map (from `README.md` and `parse_pattern.py`; box notation `xx - yy` = i
 0000 - 01bf  step data: 16x 2-byte A pattern + 16x 2-byte B pattern,
               for BD, SD, RS, CP, TT, SP1, SP2 in that order (7 instruments,
               0x40 bytes each: 32 steps x 2 bytes)
-01c0 - 01c7  bitmirrored "last step" values  (what's the 8th value?!)
+01c0 - 01c7  bitmirrored "last step" values  (8 entries; identity of the 8th unresolved)
 01c8 - 01d0  mute state for bd, sd, rs, cp, tt, sp1, sp1alt, sp2, sp2alt
               0x80 = muted vs 00 (no LFOS)
 01d1 - 01d4  mute state for bdlfo, cplfo, ttlfo, sp1lfo

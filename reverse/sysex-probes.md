@@ -7,8 +7,7 @@ Empirical sweep to answer: **does the machine ever transmit a SysEx reply?**
 - Tanzmaus **MIDI IN**  <- MIDI4x4 "In 3" = `hw:2,0,2`
 - Tanzmaus **MIDI OUT** -> MIDI4x4 "In 3" = `hw:2,0,2`  (same rawmidi node, IO)
 
-So **sending** and **listening** use the same port `hw:2,0,2` (probe messages go out,
-any replies come back in, both captured with `amidi`).
+So **sending** and **listening** use the same port `hw:2,0,2` (probe messages go out, any replies come back in, both captured with `amidi`).
 
 Preflight:
 
@@ -34,8 +33,7 @@ cap() {
 }
 ```
 
-Run the machine fully booted, sequencer idle/stopped (same state as the successful
-front-panel dump baseline `sysex-probes/bank-dump-baseline.syx`).
+Run the machine fully booted, sequencer idle/stopped (same state as the successful front-panel dump baseline `sysex-probes/bank-dump-baseline.syx`).
 
 ## Test A — Universal SysEx identity requests
 
@@ -49,23 +47,18 @@ Any response looks like `F0 7E <id> 06 02 ... F7`.
 
 ## Test B — bank dump command over MIDI (the key one)
 
-The front-panel dump is `F0 00 21 0B 04 00 03 <addr> <data> ... F7`. Does the machine
-honour it **received over MIDI** (RX → TX, i.e. a reply path)?
+The front-panel dump is `F0 00 21 0B 04 00 03 <addr> <data> ... F7`. Does the machine honour it **received over MIDI** (RX → TX, i.e. a reply path)?
 
 ```sh
 cap dump-03-noarg tanzmaus-specs/reverse/sysex-probes/cmd03-noarg.syx
 cap dump-03-zeroaddr tanzmaus-specs/reverse/sysex-probes/cmd03-zeroaddr.syx
 ```
 
-If either produces a 67,280-byte capture (identical to the baseline dump) we have
-our first empirically confirmed receive-initiated transmit.
+If either produces a 67,280-byte capture (identical to the baseline dump) we have our first empirically confirmed receive-initiated transmit.
 
 ## Test C — command-byte sweep
 
-Envelope `F0 00 21 0B 04 00 <cmd> 00 01 F7`, one message per capture.
-Curated low-risk set first, then full `00..7F` minus the dangerous/known ones
-(`0x01` firmware upload — never send; `0x03` covered in Test B; `0x05/0x06/0x07`
-sample uploads known silent).
+Envelope `F0 00 21 0B 04 00 <cmd> 00 01 F7`, one message per capture. Curated low-risk set first, then full `00..7F` minus the dangerous/known ones (`0x01` firmware upload — never send; `0x03` covered in Test B; `0x05/0x06/0x07` sample uploads known silent).
 
 ```sh
 for c in 00 02 04 08 10 20 40 7f; do
@@ -79,8 +72,7 @@ done
 
 ## Test D — boot / idle sniff
 
-Machine transmits nothing while idle (verified earlier). Re-power or reset the unit,
-then record its MIDI OUT for 15 s:
+Machine transmits nothing while idle (verified earlier). Re-power or reset the unit, then record its MIDI OUT for 15 s:
 
 ```sh
 amidi -p hw:2,0,2 -r /tmp/cap-boot.syx & p=$!; sleep 15; kill $p 2>/dev/null
@@ -91,8 +83,7 @@ A non-empty capture at boot = startup SysEx banner (a handshake/version poke we 
 
 ## Recording results
 
-**Completed 2026-09-06 — verdict: fire-and-forget.** The machine never transmits
-SysEx in response to a received message. All 13 probes returned zero bytes:
+**Completed 2026-09-06 — verdict: fire-and-forget.** The machine never transmits SysEx in response to a received message. All 13 probes returned zero bytes:
 
 | Test | Message | Bytes received | Reply? |
 |---|---|---|---|
@@ -112,17 +103,10 @@ SysEx in response to a received message. All 13 probes returned zero bytes:
 
 Notes:
 
-- The bank dump (`cmd 0x03`) is the only proven TX path, triggered via
-  front-panel Shift+Step 9 and preserved in `sysex-probes/bank-dump-baseline.syx`
-  (67,280 bytes, shell `F0 00 21 0B 04 00 03 …` — note: the real capture is
-  `04 00 03`, i.e. the transfer-class bytes `04 00` are part of the header).
-  Sending it over MIDI produces no response — confirming the dump path is
-  front-panel-gated only.
+- The bank dump (`cmd 0x03`) is the only proven TX path, triggered via front-panel Shift+Step 9 and preserved in `sysex-probes/bank-dump-baseline.syx` (67,280 bytes, shell `F0 00 21 0B 04 00 03 …` — note: the real capture is `04 00 03`, i.e. the transfer-class bytes `04 00` are part of the header). Sending it over MIDI produces no response — confirming the dump path is front-panel-gated only.
 - The Universal SysEx identity protocol is not supported.
-- The curated command sweep tested representative bytes across the `0x00..0x7F`
-  range; no response to any.
-- A boot/idle sniff was not performed (the machine transmits nothing while
-  idle, consistent with the fire-and-forget finding above).
+- The curated command sweep tested representative bytes across the `0x00..0x7F` range; no response to any.
+- A boot/idle sniff was not performed (the machine transmits nothing while idle, consistent with the fire-and-forget finding above).
 - Handshaking/blocking changes remain on hold pending the author's decision.
 
 Re-running the sweep above should produce the same outcome.

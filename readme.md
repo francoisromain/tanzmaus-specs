@@ -12,6 +12,10 @@
 
 The Tanzmaus uses a STM32F303 CCT6 GH933 9U CHN GH 610 chip
 
+- [`pcb-visual-analysis.md`](reverse/pcb-visual-analysis.md): PCB visual inspection and part markings
+- [`pcb-datasheet-STM32F303CCT6.md`](reverse/pcb-datasheet-STM32F303CCT6.md): MCU datasheet essentials
+- [`pcb-datasheet-AT45DB321E.md`](reverse/pcb-datasheet-AT45DB321E.md): Adesto 32-Mbit DataFlash (sample storage, SP1)
+- [`pcb-datasheet-AT45DB081E.md`](reverse/pcb-datasheet-AT45DB081E.md): Adesto 8-Mbit DataFlash (sample storage, SP2)
 - [`firmware.md`](reverse/firmware.md) from the [MFB firmwares](mfb/firmware/)
 - [`tool.md`](reverse/tool.md) from the [source code of the MFB sample tool app](mfb/tool/TanzmausSampleTool/) (macOS + Windows) and the [sample-tool manual](mfb/tool/user_manual_sample_tool.pdf)
 - [`factory-samples.md`](reverse/factory-samples.md): factory sample specs and slot mapping

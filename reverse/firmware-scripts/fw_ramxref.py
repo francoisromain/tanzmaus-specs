@@ -5,7 +5,7 @@ The final frame of every firmware image embeds the RAM words 0x20000161 (or
 0x20000165) and 0x200000bc. This script locates, in the reconstructed app
 image, every instruction that constructs or loads those addresses, plus a
 peripheral-constant inventory classified against the STM32F303 datasheet
-memory map (reverse/STM32F303CCT6-datasheet.md).
+memory map (reverse/pcb-datasheet-STM32F303CCT6.md).
 
 Usage:
   fw_ramxref.py <file.syx> [<file2.syx> ...]
