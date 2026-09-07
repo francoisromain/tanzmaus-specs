@@ -10,7 +10,7 @@
 
 ### `reverse/` reverse-engineering notes 
 
-The Tanzmaus uses a STM32F303 CCT6 chip
+The Tanzmaus uses a STM32F303 CCT6 GH933 9U CHN GH 610 chip
 
 - [`firmware.md`](reverse/firmware.md) from the [MFB firmwares](mfb/firmware/)
 - [`tool.md`](reverse/tool.md) from the [source code of the MFB sample tool app](mfb/tool/TanzmausSampleTool/) (macOS + Windows) and the [sample-tool manual](mfb/tool/user_manual_sample_tool.pdf)
