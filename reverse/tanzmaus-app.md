@@ -38,23 +38,23 @@ All the 32 [factory samples](factory-samples.md) sounds are embeded in a json fi
 
 | Slots | Official tool | Tanzmaus app JSON |
 |---|---|---|
-| sp1 1–8, sp2 1–4 | 22,000 | 22,176 |
-| sp1 9–16, sp2 5–12 | 44,000 | 44,088 / 44,352 |
-| sp2 13–16 | 88,000 | 88,176 |
+| SP1 1–8, SP2 1–4 | 22,000 | 22,176 |
+| SP1 9–16, SP2 5–12 | 44,000 | 44,088 / 44,352 |
+| SP2 13–16 | 88,000 | 88,176 |
 
 - Values are padded by ~176 samples beyond the tool's limits
-- sp1 slots 13–16 have 264 more samples than sp2 slots 5–12 (44,352 vs 44,088)
+- SP1 slots 13–16 have 264 more samples than SP2 slots 5–12 (44,352 vs 44,088)
 
 #### Conflict
 
 The sample length from the JSON data conflict with the app's capacity logic:
 
-JSON data shows sp1/13–16 are 1s, but the interface labels them as 2s. The `yf()` function uses `index % 16`, ignoring bank-specific differences.
+JSON data shows SP1/13–16 are 1s, but the interface labels them as 2s. The `yf()` function uses `index % 16`, ignoring bank-specific differences.
 
 **JSON data (asymmetric)**
 
-- sp1 13–16: 44,352 samples (1s capacity)
-- sp2 13–16: 88,176 samples (2s capacity)
+- SP1 13–16: 44,352 samples (1s capacity)
+- SP2 13–16: 88,176 samples (2s capacity)
 
 **`yf()` function (symmetric)**
 
@@ -67,7 +67,7 @@ function yf(m) {
 
 **Interface labels (symmetric)**
 
-Labels for slots 13–16 = "2s" for both sp1 and sp2.
+Labels for slots 13–16 = "2s" for both SP1 and SP2.
 
 ## Upload Scheduler
 
