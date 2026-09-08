@@ -29,11 +29,11 @@
 
 ## Boot modes (§3.5)
 
-Boot0 pin + Boot1 option bit select: boot from **user Flash**, **system memory**, or **embedded SRAM**. The ST ROM bootloader (system memory) speaks DFU over **USART1 (PA9/PA10), USART2 (PD5/PD6), USB (PA11/PA12)** — distinct from MFB's custom SysEx update protocol.
+Boot0 pin + Boot1 option bit select: boot from **user Flash**, **system memory**, or **embedded SRAM**. The ST ROM bootloader (system memory) speaks DFU over **USART1 (PA9/PA10), USART2 (PD5/PD6), USB (PA11/PA12)**.
 
 ## CRC unit (§3.6)
 
-Configurable generator polynomial and data size; the datasheet explicitly describes runtime-computed CRC signatures compared against a **reference signature generated at linktime and stored at a given memory location** (EN/IEC 60335-1 flash-integrity style). This first suggested the firmware's tail words might be a global image signature — tested and returned **negative** in the firmware analysis (image-level CRC32/CRC16/XOR/sum never match a tail word; see `firmware.md`, "Final frame").
+Configurable generator polynomial and data size; the datasheet explicitly describes runtime-computed CRC signatures compared against a **reference signature generated at linktime and stored at a given memory location** (EN/IEC 60335-1 flash-integrity style).
 
 ## Package pin-numbering schema
 
@@ -153,11 +153,3 @@ Pins are ordered **right → left**.
 | 46 | PB9 |
 | 47 | VSS |
 | 48 | VDD |
-
-
-
-## Relevance to the Tanzmaus RE
-
-- Confirms the decoder's `0x2000A000` reading = exact SRAM top → the word at image offset `0x1ef` is a *genuine initial-SP value*, even though `0x1ef` cannot be a legitimate vector-table base (not 4-aligned).
-- Authoritative peripheral base addresses for `fw_dispatcher.py` / any new analysis scripts; adds Flash interface `0x40022000` and CRC `0x40023000`.
-- MIDI/USART identity: the app most plausibly targets **USART1 or USART2** (the only USARTs the ROM DFU loader uses, and the bases that cluster near the app's USART-shaped accesses).

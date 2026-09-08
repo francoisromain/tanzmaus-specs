@@ -10,11 +10,11 @@ Legend: `[ ]` pending · `[x]` done
 - [x] Open the device and take high-res photos of the MCU area
 - [x] Transcribe SWD pads/header, BOOT0 resistor, chip mounting, part counts
 - [ ] Answer the open questions left in [pcb-visual-analysis.md](reverse/pcb-visual-analysis.md):
-  - [x] Any silkscreen near the MCU (`SWD` / `ST-LINK` / `BOOT0` / `NRST` / `SWDIO`)? — **No**: checked under magnification, nothing readable near the MCU; no debug pins labeled
-  - [ ] Is the BOOT0 pin (LQFP48 pin 28) easily bridgeable to 3.3 V?
-  - [ ] Are the Adesto chips soldered or socketed; exact part under magnification?
-  - [ ] Confirm only one optocoupler; recount the 165/595 chips.
-  - [ ] (low priority) Identify the 4-pin SIP just above the MCU (likely a signal-isolation transformer or DC-DC module; not a memory/upload device — see [pcb-visual-analysis.md](reverse/pcb-visual-analysis.md))
+- [x] Any silkscreen near the MCU (`SWD` / `ST-LINK` / `BOOT0` / `NRST` / `SWDIO`)? — **No**: checked under magnification, nothing readable near the MCU; no debug pins labeled
+- [ ] Is the BOOT0 pin (LQFP48 pin 28) easily bridgeable to 3.3 V?
+- [ ] Are the Adesto chips soldered or socketed; exact part under magnification?
+- [ ] Confirm only one optocoupler; recount the 165/595 chips.
+- [ ] (low priority) Identify the 4-pin SIP just above the MCU (likely a signal-isolation transformer or DC-DC module; not a memory/upload device — see [pcb-visual-analysis.md](reverse/pcb-visual-analysis.md))
 
 The transcription is documented in `pcb-visual-analysis.md`; this decides
 which hardware read paths are available.
