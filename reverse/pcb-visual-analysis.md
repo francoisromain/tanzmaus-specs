@@ -7,6 +7,7 @@
 - **MCU**: `STM32F303CCT6` (`GH933 9U CHN`) (12 pins per side, 7×7 mm, LQFP48 [datasheet](pcb-datasheet-STM32F303CCT6.md)).
 - **Clock**: `ZTT 8.00MT`: 8 MHz ceramic resonator = HSE source. The app must configure RCC/PLL from this.
 - **MIDI IN**: `H11L1` (6-pin white DIP) — Schmitt-trigger optocoupler, the classic MIDI input isolator. No second optocoupler reported → MIDI OUT is unisolated ("soft" TX), consistent with the fire-and-forget, simplex protocol.
+- **4-pin SIP just above the MCU**: black plastic body ~1 cm long, ~5 mm tall, blank top, four metal pins in a single row (parallel to the MCU's top edge). Probably a small signal-isolation transformer or a SIP-4 DC-DC/power module. **Low relevance to firmware**: it's an analog/power part — not a memory device and not an upload/programming header (real STM32 update paths are USART1 via MIDI DIN and the BOOT0 ST-ROM loader). Unpinned; trace only if the analog/audio layer becomes a concern.
 
 ## External memory
 
@@ -49,11 +50,11 @@ Classic output chain implied: MCU DAC (2-channel) → OTA VCA/filter (LM13700) �
 - The two SPI DataFlash chips localize sample/bank persistence: read them (SOIC-8 clip + SPI programmer, dead-board, no power) to recover the sample storage layout and tie it to commands `0x05/06/07`.
 - Static Tier-2 targets resolved: SPI1 `0x40013000` is the Adesto flash driver (SPI1->SR polling masks `0x80`/`0x600`; check the `.syx` for JEDEC-ID/read opcodes like `0x1F`/`0xBF`, `0x03`/`0x0B`) and USART1 `0x40013800` is the MIDI UART (BRR `0x900` = 31,250 baud; the H11L1 anchors MIDI-IN to a `PA`/`PD` USART-pin of USART1).
 - 8 MHz HSE: look for PLL/clock literals in the RCC init sequence.
-- No on-board debug header / ST-Link reported — hardware reads likely route via BOOT0 strapping (ST ROM USART loader) and/or the flash-chip clip, not SWD.
+- No on-board debug header / ST-Link reported, and **no silkscreen near the MCU** — hardware reads likely route via BOOT0 strapping (ST ROM USART loader) and/or the flash-chip clip, not an on-device SWD breakout; SWD remains physically possible only via unlabeled pins (LQFP48 46=PA13/SWDIO, 47=PA14/SWCLK, 48=VSS).
 
 ## Open questions
 
-1. Any silkscreen near the MCU (`SWD` / `ST-LINK` / `BOOT0` / `NRST` / `SWDIO`)?
+1. ~~Any silkscreen near the MCU (`SWD` / `ST-LINK` / `BOOT0` / `NRST` / `SWDIO`)?~~ **RESOLVED — no silkscreen near the MCU** (checked under magnification, nothing readable). So debug pins are unlabeled; if SWD is wanted they must be located by pinout, not silkscreen: **LQFP48 pin 46 = PA13/SWDIO, pin 47 = PA14/SWCLK** (pin 48 = VSS at the top-left corner; NRST = pin 7). Primary read routes remain BOOT0 strap (§3) + flash-chip clip (§2).
 2. BOOT0 strap: is the MCU's BOOT0 pin (LQFP48 pin 28) resistor easily bridgeable to 3.3 V?
 3. Adesto chips soldered or socketed? (parts identified: AT45DB321E / AT45DB081E)
 4. Confirm only one optocoupler (MIDI OUT unisolated) and count of 165/595 chips.

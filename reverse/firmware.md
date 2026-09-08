@@ -198,17 +198,36 @@ Caveat on the flag bit: the ISR test at `0x08012784` shifts by `#0x18` (bit 7). 
 
 Cross-checked against the host-side sample-tool source and the repo SysEx documentation. All are candidates — the image interleaves data, so boundaries are untested, and each records its confidence honestly. Items covered elsewhere in this file (SPI1/DataFlash `0x40013000`, the `0x1EF` bootloader-manifest finding, the GPIO `+0x24`/`+0x28` false-USART caveat) are linked, not duplicated.
 
-### Sample SysEx decode path — candidate, likely false-positive
+### Sample SysEx decode path — genuine executable function, reachability unproven
 
-A linear-sweep region around `0x08011D76` matches the documented sample packet format very specifically: `0x39` (57-byte CRC input), `0x30` (48-byte sample payload), a two-byte × 24-iteration loop, `lo | hi<<7` sample-word reconstruction, and `UBFX` consistent with 12-bit samples. **However** there is no direct branch/call target into it, and the region contains an invalid/unknown instruction plus incoherent literals — recorded as a false-positive candidate; do **not** use it as the sample decoder without reachability proof.
+An aligned Thumb-2 disassembly confirms `0x08011D76` is a **real compiled function** (genuine `push.w {r4..lr}` prologue at `0x08011D76`, `r7 = r0` caller buffer, `sub sp,#0xc`, clean `pop.w {...,pc}` tail at `0x08011E2E`), not a linear-sweep false positive. Its body matches the documented sample packet format exactly: reads the byte at offset `+0x3A`, `movs r1,#0x39` (57-byte CRC input), streams `r6=r7+0x0A`/`r5=r7+0x0B`, a two-byte loop terminating at `cmp r3,#0x30` (48-byte payload = 24 samples), `orr.w r2,r2,r10,lsl #7` (`lo | hi<<7` reconstruction), and `ubfx ...,#8,#4` (12-bit extract). CRC7 primitive also present (below). **Reachability is the only open point**: no direct `BL`/`BLX` immediate anywhere targets `0x08011D76` (or `±1`), so it is reached via an indirect dispatch/jump table, a wrapper, or is dead/unreferenced compiled code — do not assume it is wired to the live SysEx receiver until a reachable control-flow path is proven.
+
+### MIDI/SysEx-shaped code region at `0x08011736` — pattern verified, role unproven
+
+An aligned Thumb-2 decode of `0x08011736` shows a coherent status-classification fragment: `ldrh r0,[r3,#0x24]` plus byte-extract, tests against `0xEF` (`b`/`cc` selector), `0xB0` (control change), and `0xF0` (SysEx); a `cmp r2,#0xF7` SysEx-termination check; and a real-time `F8–FC` dispatch via `ldr.w pc,[table]` with `pop.w {...,pc}` at `0x080117BE`. Verified verbatim against the binary. **Honest caveat**: the `+0x24` read is USART1 `RDR` *only if* `r3` holds `0x40013800`, but no `movw/movt` construction of USART1 precedes it in the surrounding (data-interleaved) linear code, and `0x08011736` is not one of the two confirmed USART1 base-construction sites — so the **MIDI-receiver/RDR interpretation is unproven**, a candidate for a reachable-CFG follow-up rather than an accepted parser.
+
+### Thumb TBB/TBH switch census — verified
+
+V1.63 contains exactly **18** Thumb table-branch instructions (`tbb`/`tbh`). Sites resolve to in-flash targets conservatively (bounded by a preceding `cmp #N`, `FW_CFG` validates all case targets, no fall-through — see `fw_cfg.py`). Six resolve to coherent, walkable targets: `0x080046FA`, `0x08006A04`, `0x08007450`, `0x080088F0`, `0x0800B02A`, `0x0800CAEE`. Three resolve to in-flash targets but fail walk coherence and are treated as data/false positives: `0x08010C28`, `0x0800F2F8`, `0x0801090C`. A raw table-branch opcode alone is not evidence of a switch; it must be bounded and coherent.
 
 ### CRC7 primitive — strong, unresolved boundary
 
 Around `0x08000C6C–0x08000CF8` the instructions contain the distinctive operations of the documented CRC7 transform: `0x80` testing, conditional XOR `0x09`, `0x78` masking, shift/XOR mixing, and final `0x7F` masking. Strong evidence for the CRC7 primitive, embedded in a larger/mixed region; exact function boundary unproven, message-level CRC validation path unresolved.
 
-### Sample storage geometry — high confidence region, table unproven
+### Sample storage geometry — high confidence region, zero references
 
-At `0x0801A230` a data cluster holds the sample-tool storage geometry values `0`, `728`, `2184`, `3640`, `91`, `182`, `364`; nearby at `0x0801A248` are misaligned 16-bit constants: `0x55F0` (22000), `0xABE0` (44000), `0x157C0` (88000), verified against the decoded V1.63 image. Confidence **high**; exact structure and consumers unproven.
+At `0x0801A230` a data cluster holds the sample-tool storage geometry values `0`, `728`, `2184`, `3640`, `91`, `182`, `364`; nearby at `0x0801A248` are misaligned 16-bit constants: `0x55F0` (22000), `0xABE0` (44000), `0x157C0` (88000), verified against the decoded V1.63 image. Confidence **high**.
+
+**Zero static references** (proved on the decoded V1.63 image): no 32-bit LE literal `0x0801A230` anywhere, no `movw`/`movt` pair constructing `0x0801A2xx`, and no raw LE32 pattern pointing into `0x0801A200–0x0801B8FF` (this image addresses flash through PC-relative literal pools, so that scan is the right check). The single `movw`/`movt` pair yielding a flash address from the whole-image scan resolves to `0x0801DE90`, **beyond the image end** (`0x0801B867`) — a mid-data misdecode, not a reference.
+
+**Synced to the host tool, and the arithmetic is host-side**: the exact same geometry lives in `mfb/tool/TanzmausSampleTool/Source/TanzmausSampleTool.cpp` (lines ~279–292) and `crc7.cpp::AddPage`:
+
+- `sampleNo < 4`: `sampleSize = 22000`, `START_ADDR = ((sampleDest*4)+sampleNo)*91`
+- `sampleNo < 12`: `sampleSize = 44000`, `START_ADDR = 728 + ((sampleDest*8)+(sampleNo-4))*182`
+- `sampleNo >= 12`: `sampleSize = 88000`, `START_ADDR = 3640 + ((sampleDest*4)+(sampleNo-12))*364`
+- data transmitted as 264-sample pages; `AddPage` sends a 14-bit page address (`lo = PAGE_ADDR&0x7f`, `hi = (PAGE_ADDR>>7)&0x7f`) in frame bytes 6–7.
+
+So the device **receives** pre-computed page addresses and has no reason to multiply by 91/182/364. Confirmed: the whole image contains **no** `movw` of `91/182/364/728/3640/22000/44000/88000` and no arithmetic on those immediates — a search for a firmware `n*91` consumer is futile. The `0x0801A230` cluster is best read as a capacity/layout LUT (e.g. per-slot page-count or boundary table for validation), whose consumer — if any — is still unproven.
 
 ### Sample representation
 

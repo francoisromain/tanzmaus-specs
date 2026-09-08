@@ -246,7 +246,57 @@ def report(dump: bytes, name: str, chip: str = None):
         print(f"  {label} slots ({frames} fr x 2B = {cap} B): "
               f"{len(fits)} data region(s) at least this size"
               + (f" (max {max(fits) if fits else 0} B)" if fits else ""))
+
+    classify_content(name, regions, body)
     return 0
+
+
+def classify_content(name: str, regions, body: bytes):
+    """Roll up whether the dump looks like sample storage, a bootloader/code
+    image, or a config/store, so a chip that does *not* hold samples (and might
+    hold the separate bootloader) is not silently mistaken for one.
+
+    Samples are stored as 12-bit words split into two 7-bit transport bytes
+    (each byte < 0x80, see sysex.md). Genuine Cortex-M firmware is dense binary
+    with bytes spanning 0x00..0xFF and plenty of 16/32-bit constructor
+    immediates. A data-heavy, non-7-bit region at the flash start is therefore
+    a strong sign of a code/configuration image rather than samples."""
+    if not regions:
+        print("\n-- content classification --")
+        print("  blank/erased — not a populated sample or code image")
+        return
+
+    total_data = sum(e - s for s, e in regions)
+    low = sum(1 for b in body if b < 0x80)  # 7-bit-ish bytes
+    frac7 = (low / len(body)) if body else 0.0
+
+    # a fully sample-like store keeps almost every byte < 0x80
+    sample_consistent = frac7 >= 0.85
+
+    # any data block that is large AND binary-dense (many high bytes) is a
+    # candidate for non-sample content (code/config), esp. at low address
+    non_sample = []
+    for start, end in regions:
+        blk = body[start:end]
+        if not blk:
+            continue
+        lt = sum(1 for b in blk if b < 0x80)
+        fr = lt / len(blk)
+        if fr < 0.6:           # majority high-bit bytes => not 7-bit samples
+            non_sample.append((start, end, len(blk), fr))
+
+    print("\n-- content classification --")
+    print(f"  7-bit-ish bytes  : {frac7*100:.1f}% of body (sample-encoded look is "
+          f"{'consistent' if sample_consistent else 'NOT consistent'})")
+    if non_sample:
+        print("  WARNING: data-heavy (non-7-bit) region(s) present — not sample-like:")
+        for start, end, ln, fr in non_sample[:8]:
+            where = "at flash start" if start < 64 << 10 else f"at 0x{start:06x}"
+            print(f"    0x{start:06x} .. 0x{end:06x}  ({ln} B, {fr*100:.0f}% high-bit)  {where}")
+        print("  => could be a bootloader / config store rather than samples; "
+              "dump this chip's regions separately and disassemble/analyze them.")
+    if not sample_consistent and not non_sample:
+        print("  (mixed or sparse data — run the region-level scan above for detail)")
 
 
 def main(argv=None):

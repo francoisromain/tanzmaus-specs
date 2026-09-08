@@ -35,6 +35,127 @@ Boot0 pin + Boot1 option bit select: boot from **user Flash**, **system memory**
 
 Configurable generator polynomial and data size; the datasheet explicitly describes runtime-computed CRC signatures compared against a **reference signature generated at linktime and stored at a given memory location** (EN/IEC 60335-1 flash-integrity style). This first suggested the firmware's tail words might be a global image signature — tested and returned **negative** in the firmware analysis (image-level CRC32/CRC16/XOR/sum never match a tail word; see `firmware.md`, "Final frame").
 
+## Package pin-numbering schema
+
+The STM32F303CCT6 is housed in a 48-pin LQFP package with 12 pins on each side.
+
+When viewing the **top of the chip**, with **pin 1 at the upper-left corner**, pin numbering proceeds **counter-clockwise** around the package:
+
+```text
+                              TOP
+          48  47  46  45  44  43  42  41  40  39  38  37
+        ┌────────────────────────────────────────────────────┐
+        │                                                    │
+   1    │                                                    │    36
+   2    │                                                    │    35
+   3    │                                                    │    34
+   4    │                                                    │    33
+   5    │                                                    │    32
+   6    │                                                    │    31
+   7    │                                                    │    30
+   8    │                                                    │    29
+   9    │                                                    │    28
+  10    │                                                    │    27
+  11    │                                                    │    26
+  12    │                                                    │    25
+        └────────────────────────────────────────────────────┘
+          13  14  15  16  17  18  19  20  21  22  23  24
+                            BOTTOM
+```
+
+### Pin ordering by physical side
+
+| Physical side | Pin order | Direction when viewed from top |
+|---|---|---|
+| Left | 1 → 12 | Top → bottom |
+| Bottom | 13 → 24 | Left → right |
+| Right | 25 → 36 | Bottom → top |
+| Top | 37 → 48 | Right → left |
+
+### Pin 1
+
+**Pin 1 is the uppermost pin on the left side** in the orientation shown above.
+
+The package has a pin-1 identification mark. Once pin 1 is located, numbering proceeds counter-clockwise around the package.
+
+### Left side — pins 1–12
+
+Pins are ordered **top → bottom**.
+
+| Pin | Function |
+|---:|---|
+| 1 | VBAT |
+| 2 | PC13 |
+| 3 | PC14 / OSC32_IN |
+| 4 | PC15 / OSC32_OUT |
+| 5 | PF0 / OSC_IN |
+| 6 | PF1 / OSC_OUT |
+| 7 | NRST |
+| 8 | VSSA / VREF− |
+| 9 | VDDA / VREF+ |
+| 10 | PA0 |
+| 11 | PA1 |
+| 12 | PA2 |
+
+### Bottom — pins 13–24
+
+Pins are ordered **left → right**.
+
+| Pin | Function |
+|---:|---|
+| 13 | PA3 |
+| 14 | PA4 |
+| 15 | PA5 |
+| 16 | PA6 |
+| 17 | PA7 |
+| 18 | PB0 |
+| 19 | PB1 |
+| 20 | PB2 |
+| 21 | PB10 |
+| 22 | PB11 |
+| 23 | VSS |
+| 24 | VDD |
+
+### Right side — pins 25–36
+
+Pins are ordered **bottom → top**.
+
+| Pin | Function |
+|---:|---|
+| 25 | PB12 |
+| 26 | PB13 |
+| 27 | PB14 |
+| 28 | PB15 |
+| 29 | PA8 |
+| 30 | PA9 |
+| 31 | PA10 |
+| 32 | PA11 |
+| 33 | PA12 |
+| 34 | PA13 |
+| 35 | VSS |
+| 36 | VDD |
+
+### Top — pins 37–48
+
+Pins are ordered **right → left**.
+
+| Pin | Function |
+|---:|---|
+| 37 | PA14 |
+| 38 | PA15 |
+| 39 | PB3 |
+| 40 | PB4 |
+| 41 | PB5 |
+| 42 | PB6 |
+| 43 | PB7 |
+| 44 | BOOT0 |
+| 45 | PB8 |
+| 46 | PB9 |
+| 47 | VSS |
+| 48 | VDD |
+
+
+
 ## Relevance to the Tanzmaus RE
 
 - Confirms the decoder's `0x2000A000` reading = exact SRAM top → the word at image offset `0x1ef` is a *genuine initial-SP value*, even though `0x1ef` cannot be a legitimate vector-table base (not 4-aligned).

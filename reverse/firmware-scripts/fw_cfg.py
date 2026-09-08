@@ -16,7 +16,9 @@ so the tool:
      Calls (`bl`/`blx #imm`) are recorded as edges but NOT inlined into the
      caller — each function body is walked independently, which keeps the
      per-function reach compact and matches the standard recursive-descent
-     function-discovery model.
+     function-discovery model. Thumb `tbb`/`tbh` table branches are resolved
+     conservatively (bounded by a preceding `cmp #N`, targets validated to
+     stay in flash, **no** fall-through edge).
   3. Keeps a root as a *confirmed function* only if its walk is coherent:
      it reaches a return, stays within flash, and is reasonably dense
      (a tight region). Roots whose expansion wanders sparsely across a wide
@@ -123,6 +125,57 @@ class CfgBuilder:
     def _in_flash(self, addr: int) -> bool:
         return FLASH_BASE <= addr < FLASH_MAX
 
+    # ---- Thumb TBB/TBH switch resolution --------------------------------
+    def _switch_table(self, insn: Instr):
+        """Resolve a Thumb `tbb`/`tbh` table branch conservatively.
+
+        ARM Thumb table branches use an architectural PC of `address + 4`.
+        Entries are byte (tbb) or halfword (tbh) offsets relative to that
+        table base, multiplied by two. We bound the table size with a nearby
+        preceding `cmp ..., #N` and validate every resolved target stays
+        inside flash. If the table cannot be resolved safely we return []
+        and the walk simply stops at the branch (never decoding table bytes
+        as code) — a conservative indirect-branch model.
+        """
+        m = insn.mnemonic.rstrip(".w")
+        if m not in ("tbb", "tbh"):
+            return []
+
+        # bound the number of cases from a nearby preceding `cmp #N`
+        max_n = None
+        cur = insn.addr - 2
+        for _ in range(8):
+            p = self._decode(cur)
+            if p is None:
+                break
+            if p.mnemonic.startswith("cmp") and "#" in p.op_str:
+                try:
+                    max_n = int(p.op_str.split("#", 1)[1].split(",", 1)[0], 0)
+                    break
+                except ValueError:
+                    pass
+            cur -= p.size
+        if max_n is None or not (0 <= max_n <= 255):
+            return []
+
+        table_base = (insn.addr + 4) & ~3
+        entry_size = 1 if m == "tbb" else 2
+        count = max_n + 1
+        off = table_base - self.base
+        if off < 0 or off + count * entry_size > len(self.image):
+            return []
+
+        targets = []
+        for i in range(count):
+            p = off + i * entry_size
+            value = (self.image[p] if entry_size == 1
+                     else int.from_bytes(self.image[p:p + 2], "little"))
+            target = table_base + value * 2
+            if not self._in_flash(target):
+                return []
+            targets.append(target)
+        return targets
+
     # ---- control-flow classification ------------------------------------
     def _classify(self, insn: Instr):
         """Return (kind, target, fallthrough)."""
@@ -137,6 +190,8 @@ class CfgBuilder:
             return "ret", None, False
         if m == "bx":
             return "ind", None, False
+        if m in ("tbb", "tbh"):
+            return "switch", None, False
         if m in ("cbz", "cbnz"):
             return "cond_br", tgt, True
         if m == "bl":
@@ -185,6 +240,15 @@ class CfgBuilder:
                     stack.append(addr + insn.size)
                 continue
             if kind == "ind":
+                continue
+            if kind == "switch":
+                # TBB/TBH are indirect branches with no architectural
+                # fall-through. Resolve only validated case targets; if the
+                # table cannot be resolved safely, terminate this path rather
+                # than decoding table bytes as code.
+                for target in self._switch_table(insn):
+                    br_edges.add((addr, target))
+                    stack.append(target)
                 continue
             if kind == "br":
                 if tgt is not None:
